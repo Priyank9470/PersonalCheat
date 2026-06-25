@@ -1,0 +1,1074 @@
+================================================================================
+         C# INTERVIEW QUESTIONS — BASIC TO ADVANCED
+         (With examples and answers)
+================================================================================
+
+HOW TO USE THIS FILE:
+  - Read each Q, think of your own answer first, then check the A.
+  - The companion project (CSharpInterviewPrep/) has runnable code for every topic.
+  - Sections: Basics → OOP → Interfaces → Generics → Collections →
+              LINQ → Delegates/Events → Async/Await → Exception Handling →
+              Modern C# → Memory/Performance → Design Patterns / SOLID
+
+================================================================================
+SECTION 1: C# BASICS
+================================================================================
+
+Q1: What is C# and what are its key features?
+──────────────────────────────────────────────
+A: C# is a modern, strongly typed, object-oriented language by Microsoft running
+   on the .NET platform. Key features:
+   • Object-oriented (classes, inheritance, polymorphism)
+   • Type-safe — prevents unsafe casts at compile time
+   • Garbage collected — automatic memory management
+   • LINQ — query any data source with a unified syntax
+   • async/await — first-class asynchronous programming
+   • Generics — type-safe reusable algorithms
+   • Delegates & Events — functional/reactive programming
+   • Nullable reference types — explicit null safety (C# 8+)
+   • Cross-platform — .NET 5+ runs on Windows, Linux, macOS
+
+────────────────────────────────────────────────────────────────────────────────
+Q2: What is the difference between value types and reference types?
+──────────────────────────────────────────────────────────────────────
+A: Value types (int, double, bool, char, struct, enum):
+   • Stored on the STACK (or inline in the containing object on heap)
+   • Assignment copies the VALUE
+   • Cannot be null (unless Nullable<T> / T?)
+   • Examples: int, double, bool, char, DateTime, struct, enum
+
+   Reference types (class, string, array, delegate, interface):
+   • Object stored on the HEAP, variable holds a POINTER (reference)
+   • Assignment copies the REFERENCE (both point to same object)
+   • Can be null
+   • Examples: string, class, array, List<T>, object, delegate
+
+   Example:
+     int a = 5; int b = a; b = 10;    // a=5, b=10  (independent)
+     int[] x = {1,2}; int[] y = x;
+     y[0] = 99;                        // x[0]=99 too (same object)
+
+────────────────────────────────────────────────────────────────────────────────
+Q3: What is boxing and unboxing? Why is it a concern?
+──────────────────────────────────────────────────────
+A: Boxing:   converting a value type to object (heap allocation, slow)
+   Unboxing: casting object back to value type (explicit, can throw InvalidCastException)
+
+   int n = 42;
+   object box  = n;       // Boxing: allocates on heap
+   int unboxed = (int)box; // Unboxing: type must match exactly
+
+   Concern: in hot loops, boxing/unboxing causes many heap allocations → GC pressure.
+   Solution: use generics (List<int> instead of ArrayList).
+
+────────────────────────────────────────────────────────────────────────────────
+Q4: What is the difference between const and readonly?
+───────────────────────────────────────────────────────
+A: const:
+   • Compile-time constant (value embedded in IL)
+   • Implicitly static
+   • Must be a primitive, string, or enum
+   • Cannot be changed after declaration
+
+   readonly:
+   • Runtime constant — set in declaration or constructor
+   • Can be instance or static
+   • Can hold any type (including reference types)
+   • Set once; cannot be reassigned after construction
+
+   Example:
+     public const    double Pi    = 3.14159;   // compile-time
+     public readonly DateTime Created;          // set in constructor
+
+   When to use const: truly fixed values (mathematical constants, config keys)
+   When to use readonly: values known only at runtime or set via DI
+
+────────────────────────────────────────────────────────────────────────────────
+Q5: What is the difference between ref, out, and in parameters?
+────────────────────────────────────────────────────────────────
+A: ref:
+   • Must be initialized BEFORE passing
+   • Caller and method can read/write
+   • void Double(ref int x) { x *= 2; }
+
+   out:
+   • Does NOT need initialization before passing
+   • Method MUST assign before returning
+   • void GetName(out string name) { name = "Alice"; }
+   • Common usage: bool int.TryParse("123", out int result)
+
+   in (C# 7.2):
+   • Read-only by-reference (no copy, no mutation)
+   • Used for large structs (performance)
+   • void Print(in BigStruct s) { Console.Write(s.X); }
+
+────────────────────────────────────────────────────────────────────────────────
+Q6: What is string interning? Why does == work for string literals?
+────────────────────────────────────────────────────────────────────
+A: The CLR maintains a string intern pool. Identical string LITERALS are stored
+   only once in this pool. All variables pointing to the same literal share the
+   same reference.
+
+   string a = "hello";
+   string b = "hello";
+   Console.WriteLine(a == b);              // true  (value comparison — C# overloads ==)
+   Console.WriteLine(ReferenceEquals(a,b)); // true  (same interned reference)
+
+   Runtime strings (from input, StringBuilder, etc.) are NOT interned by default.
+   Use string.Intern(s) to force interning.
+
+   C# overloads == for string to compare BY VALUE, unlike other reference types.
+
+────────────────────────────────────────────────────────────────────────────────
+Q7: What is the difference between == and .Equals()?
+─────────────────────────────────────────────────────
+A: ==        : operator (can be overloaded per type)
+   .Equals() : virtual method (overridable per type)
+
+   For value types: both compare by VALUE.
+   For reference types: == compares by REFERENCE by default; Equals too (unless overridden).
+   For string:        == and Equals both compare by VALUE (C# overloads ==).
+   For records:       both compare by VALUE (compiler generates this).
+
+   object o1 = new object(); object o2 = o1;
+   o1 == o2        → true  (same reference)
+   o1.Equals(o2)   → true  (same reference — not overridden)
+
+   Best practice: override Equals AND GetHashCode together; implement IEquatable<T>.
+
+────────────────────────────────────────────────────────────────────────────────
+Q8: What is the difference between String and StringBuilder?
+─────────────────────────────────────────────────────────────
+A: string (System.String):
+   • Immutable — every operation creates a NEW string
+   • Concatenation in a loop: O(n²) time and many allocations
+   • Interned in the pool (literals)
+
+   StringBuilder (System.Text.StringBuilder):
+   • Mutable buffer — modifies in place
+   • Efficient for repeated concatenation (O(n) amortized)
+
+   Use string    : for a fixed value or simple concatenation (< ~10 operations)
+   Use StringBuilder : inside loops or when building a string from many parts
+
+   var sb = new StringBuilder();
+   for (int i = 0; i < 1000; i++) sb.Append(i).Append(',');
+   string result = sb.ToString();
+
+────────────────────────────────────────────────────────────────────────────────
+Q9: What are access modifiers in C#?
+──────────────────────────────────────
+A: public              : accessible everywhere
+   private             : accessible within the same class only (default for members)
+   protected           : accessible within the class and derived classes
+   internal            : accessible within the same assembly
+   protected internal  : accessible within same assembly OR derived classes
+   private protected   : accessible within same assembly AND derived classes only
+   file (C# 11)        : accessible within the same source file
+
+────────────────────────────────────────────────────────────────────────────────
+Q10: What is the difference between is and as?
+───────────────────────────────────────────────
+A: is:  returns bool; checks if object is a given type
+   as:  returns null if cast fails (no exception); only for reference/nullable types
+
+   Animal a = new Dog("Rex");
+
+   if (a is Dog d) { d.Bark(); }      // pattern matching (C# 7+), safe
+   Dog? d2 = a as Dog;                 // null if a is not Dog
+   Dog  d3 = (Dog)a;                   // throws InvalidCastException if not Dog
+
+   Prefer: if (a is Dog d) { } — combines check and cast.
+
+────────────────────────────────────────────────────────────────────────────────
+Q11: What are extension methods?
+─────────────────────────────────
+A: Extension methods add functionality to existing types WITHOUT modifying them.
+   Defined as static methods in a static class with 'this' as first param.
+
+   public static class StringExtensions
+   {
+       public static bool IsNullOrEmpty(this string? s) => string.IsNullOrEmpty(s);
+       public static string Truncate(this string s, int max)
+           => s.Length <= max ? s : s[..max] + "...";
+   }
+
+   Usage: "Hello World".Truncate(5)  →  "Hello..."
+
+   LINQ itself is built entirely on extension methods (Where, Select, etc.)
+
+────────────────────────────────────────────────────────────────────────────────
+Q12: What is var and when should you use it?
+─────────────────────────────────────────────
+A: var is implicit typing — the compiler infers the type at compile time.
+   It is NOT dynamic; the type is fixed at compile time.
+
+   var list = new List<int>();         // inferred: List<int>
+   var name = "Alice";                 // inferred: string
+   var x    = 42;                      // inferred: int
+
+   Use var: when the type is obvious from the right side, or for complex generic types.
+   Avoid var: when it makes code harder to read (e.g., var result = Calculate();)
+
+================================================================================
+SECTION 2: OBJECT-ORIENTED PROGRAMMING (OOP)
+================================================================================
+
+Q13: What are the four pillars of OOP?
+────────────────────────────────────────
+A: 1. Encapsulation  — hiding internal state; exposing through public API (properties)
+   2. Inheritance    — a class inherits members from a base class (is-a relationship)
+   3. Polymorphism   — same interface, different behavior (override, virtual)
+   4. Abstraction    — hiding implementation details (abstract class / interface)
+
+────────────────────────────────────────────────────────────────────────────────
+Q14: What is the difference between virtual, override, and new?
+────────────────────────────────────────────────────────────────
+A: virtual  : base class method can be overridden in derived class
+   override : derived class provides a new implementation (replaces base)
+   new      : METHOD HIDING — hides base class method, NOT polymorphic
+
+   class Base    { public virtual string M()   => "Base";     }
+   class DerA    { public override string M()  => "DerA";     }  // polymorphic
+   class DerB    { public new    string M()    => "DerB";     }  // hiding
+
+   Base b = new DerA();
+   b.M()   → "DerA"   (override — virtual dispatch)
+
+   Base c = new DerB();
+   c.M()   → "Base"   (new — base method called via base ref!)
+
+   Key: override participates in runtime polymorphism; new does NOT.
+
+────────────────────────────────────────────────────────────────────────────────
+Q15: What is the difference between an abstract class and an interface?
+────────────────────────────────────────────────────────────────────────
+A: Abstract class:
+   • Can have fields, constructors, concrete methods, properties
+   • Single inheritance (a class can extend only ONE abstract class)
+   • Use when classes share code AND represent an "is-a" hierarchy
+   • Can have access modifiers on members
+
+   Interface:
+   • No fields, no constructors (C# 8+ allows default implementations)
+   • A class can implement MULTIPLE interfaces
+   • Use for "can-do" capabilities (IDisposable, IComparable, IEnumerable)
+   • All members public by default (C# 8+ allows non-public in defaults)
+
+   Rule of thumb:
+   • "is-a" with shared code           → abstract class
+   • "can-do" / unrelated types share a contract → interface
+
+────────────────────────────────────────────────────────────────────────────────
+Q16: What is the sealed keyword?
+──────────────────────────────────
+A: On a class:  prevents inheritance (string, StringBuilder are sealed)
+   On a method: prevents further overriding in derived classes
+
+   public sealed class MyFinalClass { }          // cannot be inherited
+
+   class Base    { public virtual  void M() { } }
+   class Middle  { public sealed override void M() { } } // no further override
+   class Derived : Middle { public override void M() { } } // compile ERROR
+
+   Use sealed on classes for security/performance (JIT can devirtualize calls).
+
+────────────────────────────────────────────────────────────────────────────────
+Q17: What is constructor chaining (:this / :base)?
+────────────────────────────────────────────────────
+A: :this  — calls another constructor in the SAME class
+   :base  — calls a constructor in the BASE class
+
+   class Person
+   {
+       public Person(string name) : this(name, 0) { }         // chains to below
+       public Person(string name, int age) { Name=name; Age=age; }
+   }
+
+   class Employee : Person
+   {
+       public Employee(string name) : base(name) { }           // calls Person(name)
+   }
+
+   Benefits: avoids code duplication, ensures base is always properly initialized.
+
+────────────────────────────────────────────────────────────────────────────────
+Q18: What is IDisposable and the using statement?
+──────────────────────────────────────────────────
+A: IDisposable.Dispose() is called to release unmanaged resources (file handles,
+   DB connections, network sockets) before the GC runs.
+
+   using statement: calls Dispose() automatically, even if an exception is thrown.
+
+   // Brace form
+   using (var conn = new SqlConnection(connStr))
+   {
+       conn.Open();
+       // use conn
+   } // Dispose() called here
+
+   // Declaration form (C# 8+)
+   using var conn = new SqlConnection(connStr);
+   // Dispose() called at end of enclosing scope
+
+   Pattern (implement IDisposable):
+   public class MyResource : IDisposable
+   {
+       private bool _disposed;
+       public void Dispose()
+       {
+           if (_disposed) return;
+           // release unmanaged resources
+           _disposed = true;
+           GC.SuppressFinalize(this); // tell GC finalizer not needed
+       }
+   }
+
+================================================================================
+SECTION 3: GENERICS
+================================================================================
+
+Q19: What are generics and why use them?
+─────────────────────────────────────────
+A: Generics let you write type-safe, reusable code without specifying a concrete type.
+
+   Without generics: use object → boxing, no compile-time safety
+   With generics:    type is resolved at compile time, no boxing
+
+   List<T> vs ArrayList:
+     ArrayList list = new ArrayList(); list.Add(42); int x = (int)list[0]; // boxing!
+     List<int> list = new List<int>(); list.Add(42); int x = list[0];       // no boxing
+
+   Generic method:
+     T Max<T>(T a, T b) where T : IComparable<T> => a.CompareTo(b) > 0 ? a : b;
+
+────────────────────────────────────────────────────────────────────────────────
+Q20: What are generic constraints?
+────────────────────────────────────
+A: Constraints restrict what types can be used as type arguments.
+
+   where T : class       — T must be a reference type
+   where T : struct      — T must be a value type (non-nullable)
+   where T : new()       — T must have a public parameterless constructor
+   where T : BaseClass   — T must inherit from BaseClass
+   where T : IInterface  — T must implement IInterface
+   where T : IComparable<T> — T must implement IComparable<T>
+   where T : notnull     — T must not be nullable (C# 8+)
+   where T : unmanaged   — T must be an unmanaged value type (C# 7.3+)
+
+   Example:
+     void Save<T>(T entity) where T : class, IEntity, new()
+     { var copy = new T(); /* use entity */ }
+
+────────────────────────────────────────────────────────────────────────────────
+Q21: What is covariance and contravariance in generics?
+────────────────────────────────────────────────────────
+A: Covariance (out T)     : allows using a MORE DERIVED type than specified.
+   Contravariance (in T)  : allows using a LESS DERIVED (more base) type.
+
+   interface IProducer<out T> { T Produce(); }   // covariant
+   interface IConsumer<in  T> { void Use(T t); } // contravariant
+
+   IProducer<Dog>    dp = new DogFactory();
+   IProducer<Animal> ap = dp;    // OK — Dog IS-A Animal (covariant)
+
+   IConsumer<Animal> ac = new AnimalLogger();
+   IConsumer<Dog>    dc = ac;    // OK — Animal consumer can handle Dog (contravariant)
+
+   Only works on interfaces and delegates.
+   out T  → only appears as return type (produce)
+   in  T  → only appears as parameter (consume)
+
+================================================================================
+SECTION 4: COLLECTIONS
+================================================================================
+
+Q22: What is the difference between Array and List<T>?
+────────────────────────────────────────────────────────
+A: Array:
+   • Fixed size (set at creation)
+   • Faster iteration (no overhead)
+   • Supports multi-dimensional (int[,] grid)
+   • Lower memory overhead
+
+   List<T>:
+   • Dynamic size (grows by doubling capacity)
+   • Rich API: Add, Remove, Sort, Find, LINQ-ready
+   • Slightly more overhead (Capacity tracking)
+
+   Use Array: when size is known and won't change (raw performance)
+   Use List<T>: in most application code
+
+────────────────────────────────────────────────────────────────────────────────
+Q23: What is the difference between Dictionary<K,V> and Hashtable?
+───────────────────────────────────────────────────────────────────
+A: Hashtable (non-generic, legacy):
+   • Stores key/value as object — boxing for value types
+   • NOT thread-safe
+   • No compile-time type safety
+
+   Dictionary<K,V> (generic):
+   • Type-safe, no boxing for value types
+   • NOT thread-safe
+   • Better performance
+   • Use TryGetValue to avoid double lookup
+
+   ConcurrentDictionary<K,V>:
+   • Thread-safe version with fine-grained locking
+   • Use in multi-threaded scenarios
+
+────────────────────────────────────────────────────────────────────────────────
+Q24: What is the difference between IEnumerable<T> and IQueryable<T>?
+───────────────────────────────────────────────────────────────────────
+A: IEnumerable<T>:
+   • In-memory iteration (LINQ to Objects)
+   • Query executes in application memory
+   • Use for collections already loaded (List, Array)
+   • Supports deferred execution via yield
+
+   IQueryable<T>:
+   • Query translated to external query (SQL, etc.)
+   • Expression trees passed to provider (EF Core, Dapper)
+   • WHERE/SELECT run on the DATABASE (much more efficient)
+   • Use with ORMs for server-side filtering
+
+   Example (EF Core):
+     IQueryable<User> q  = db.Users.Where(u => u.Age > 18); // SQL WHERE
+     IEnumerable<User> e = db.Users.AsEnumerable().Where(u => u.Age > 18); // loads ALL then filters
+
+────────────────────────────────────────────────────────────────────────────────
+Q25: What is yield return and how does it work?
+────────────────────────────────────────────────
+A: yield return creates an iterator that produces values lazily (one at a time).
+   The method suspends after each yield and resumes when the next value is needed.
+
+   IEnumerable<int> Evens(int max)
+   {
+       for (int i = 2; i <= max; i += 2)
+           yield return i;  // pause here, resume on next iteration
+   }
+
+   foreach (var n in Evens(10)) Console.Write(n + " "); // 2 4 6 8 10
+
+   Benefits:
+   • Memory-efficient (no full collection built)
+   • Lazy — values computed only when needed
+   • Used by LINQ (Where, Select internally use deferred execution)
+
+================================================================================
+SECTION 5: LINQ
+================================================================================
+
+Q26: What is deferred vs immediate execution in LINQ?
+──────────────────────────────────────────────────────
+A: Deferred (lazy): query is DEFINED but NOT run until iterated.
+   Methods: Where, Select, OrderBy, Skip, Take, GroupBy, Join
+
+   Immediate: query runs RIGHT NOW, returns a concrete result.
+   Methods: ToList(), ToArray(), ToDictionary(), Count(), Sum(), First(), Any(), Max()
+
+   var q = list.Where(x => x > 5);  // NOT executed yet
+   list.Add(10);                      // add to source AFTER query defined
+   foreach (var x in q) ...          // NOW executed — sees the new 10
+
+   Key interview point: calling ToList() before further filtering loads everything
+   into memory. Keep queries as IQueryable when filtering in DB.
+
+────────────────────────────────────────────────────────────────────────────────
+Q27: What is the difference between Select and SelectMany?
+───────────────────────────────────────────────────────────
+A: Select:      projects each element to a new value (1-to-1 mapping)
+   SelectMany:  flattens a sequence of sequences (1-to-many, then flattens)
+
+   var words  = new[] { "Hello World", "Foo Bar" };
+   var chars1 = words.Select(w => w.Split(' '));    // IEnumerable<string[]> — nested
+   var chars2 = words.SelectMany(w => w.Split(' ')); // IEnumerable<string> — flat
+   // chars2: "Hello", "World", "Foo", "Bar"
+
+────────────────────────────────────────────────────────────────────────────────
+Q28: What is the difference between First, FirstOrDefault, Single, SingleOrDefault?
+────────────────────────────────────────────────────────────────────────────────────
+A: First()              : first element; throws if empty
+   FirstOrDefault()     : first element or default(T) if empty
+   Single()             : exactly ONE element; throws if 0 or >1 elements
+   SingleOrDefault()    : exactly one or default; throws if >1 elements
+
+   When to use Single: when you KNOW there's exactly one match (by unique ID).
+   When to use First:  when you want the first matching element of many.
+   When to use FirstOrDefault: when result may not exist.
+
+================================================================================
+SECTION 6: DELEGATES, FUNC, ACTION & EVENTS
+================================================================================
+
+Q29: What is a delegate in C#?
+───────────────────────────────
+A: A delegate is a type-safe function pointer — it holds a reference to a method
+   with a specific signature.
+
+   delegate int Calculate(int a, int b);
+   Calculate add = (a, b) => a + b;
+   int result    = add(3, 4);   // 7
+
+   Delegates are multicast: you can combine multiple methods with +=
+   and invoke all of them with a single call.
+
+────────────────────────────────────────────────────────────────────────────────
+Q30: What is the difference between Func<T>, Action<T>, and Predicate<T>?
+──────────────────────────────────────────────────────────────────────────
+A: Func<T1,...,TResult>  : takes 0-16 input params, returns TResult
+   Action<T1,...>         : takes 0-16 input params, returns void
+   Predicate<T>           : takes T, returns bool (= Func<T, bool>)
+
+   Func<int, string>    toString  = n => n.ToString();
+   Action<string>       print     = msg => Console.WriteLine(msg);
+   Predicate<int>       isEven    = n => n % 2 == 0;
+
+────────────────────────────────────────────────────────────────────────────────
+Q31: What is an event in C#?
+──────────────────────────────
+A: An event is a multicast delegate wrapped with publish/subscribe semantics.
+   It prevents subscribers from: invoking the event directly, or replacing the
+   invocation list (= vs +=).
+
+   public event EventHandler<MyArgs>? OnChanged;  // publisher
+
+   // subscriber
+   obj.OnChanged += Handler;    // subscribe
+   obj.OnChanged -= Handler;    // unsubscribe
+
+   Best practice: use EventHandler<TEventArgs> where TEventArgs : EventArgs.
+
+────────────────────────────────────────────────────────────────────────────────
+Q32: What is a closure in C#?
+───────────────────────────────
+A: A closure is a lambda/delegate that CAPTURES variables from its enclosing scope.
+   The captured variable is shared — not a copy of the value at capture time.
+
+   int counter = 0;
+   Action increment = () => counter++;
+   increment(); increment();
+   Console.WriteLine(counter); // 2  (closure captured 'counter' by reference)
+
+   Classic bug in loops:
+   var fns = new List<Func<int>>();
+   for (int i = 0; i < 3; i++)
+       fns.Add(() => i);           // all capture the SAME i
+   // after loop, i=3; all return 3
+
+   Fix: capture a copy
+   for (int i = 0; i < 3; i++) { int copy = i; fns.Add(() => copy); }
+   // returns 0, 1, 2
+
+================================================================================
+SECTION 7: ASYNC / AWAIT
+================================================================================
+
+Q33: How does async/await work?
+─────────────────────────────────
+A: async marks a method as asynchronous. await suspends the method until the
+   awaited Task completes, freeing the current thread for other work.
+
+   async Task<string> GetDataAsync()
+   {
+       string data = await httpClient.GetStringAsync(url); // thread is NOT blocked
+       return data.ToUpper();
+   }
+
+   Under the hood: the compiler transforms the method into a state machine.
+   After the await, execution resumes on the captured synchronization context
+   (or any thread pool thread if ConfigureAwait(false)).
+
+────────────────────────────────────────────────────────────────────────────────
+Q34: What is the difference between Task and Thread?
+─────────────────────────────────────────────────────
+A: Thread:
+   • OS-level (~1 MB stack), expensive to create
+   • Direct control over execution
+   • Use for long-running, dedicated background threads
+
+   Task:
+   • Abstraction over ThreadPool threads
+   • Lightweight, composable (WhenAll, WhenAny, ContinueWith)
+   • Works with async/await
+   • Use for most asynchronous work
+
+   Task.Run(() => HeavyWork()) — runs on ThreadPool (CPU-bound)
+   await httpClient.GetAsync() — no thread while waiting (I/O-bound)
+
+────────────────────────────────────────────────────────────────────────────────
+Q35: What is the difference between async void and async Task?
+───────────────────────────────────────────────────────────────
+A: async Task:
+   • Exceptions propagate normally (caller can await and catch)
+   • Caller can await completion
+   • Always prefer this
+
+   async void:
+   • Exceptions are UNHANDLED — they propagate to the SynchronizationContext
+     and can crash the application
+   • Caller cannot await completion
+   • Only use for event handlers (Button.Click += async (s, e) => { ... })
+
+────────────────────────────────────────────────────────────────────────────────
+Q36: What is ConfigureAwait(false) and when should you use it?
+───────────────────────────────────────────────────────────────
+A: By default, await resumes on the CAPTURED synchronization context (e.g.,
+   UI thread in WinForms/WPF, ASP.NET classic request context).
+
+   ConfigureAwait(false): tells the awaiter NOT to resume on the original context.
+   Execution resumes on any available thread pool thread.
+
+   When to use:
+   • Library code — avoids deadlocks if consumed from a context with SyncContext
+   • Server-side code (.NET Core has no SyncContext, but it's still a good habit)
+
+   When NOT needed:
+   • UI code that updates controls after await (must be on UI thread)
+   • .NET Core / .NET 5+ ASP.NET (no SyncContext by default)
+
+   await someTask.ConfigureAwait(false);
+
+────────────────────────────────────────────────────────────────────────────────
+Q37: What is Task.WhenAll vs Task.WhenAny?
+───────────────────────────────────────────
+A: Task.WhenAll(t1, t2, t3):
+   • Awaits ALL tasks to complete
+   • Returns array of results
+   • If any fails, exception is thrown after ALL complete (use AggregateException)
+   • Use for parallel independent operations
+
+   Task.WhenAny(t1, t2, t3):
+   • Returns when the FIRST task completes (the others still run)
+   • Returns the completed Task<T>
+   • Use for timeouts, racing, hedging
+
+   Example timeout pattern:
+   var work    = DoWorkAsync(ct);
+   var timeout = Task.Delay(5000, ct);
+   if (await Task.WhenAny(work, timeout) == timeout)
+       throw new TimeoutException();
+
+────────────────────────────────────────────────────────────────────────────────
+Q38: What is CancellationToken and why is it important?
+────────────────────────────────────────────────────────
+A: CancellationToken lets callers signal that an operation should be cancelled.
+   It is a cooperative mechanism — the called method checks the token.
+
+   using var cts = new CancellationTokenSource();
+   cts.CancelAfter(TimeSpan.FromSeconds(5)); // auto-cancel after 5s
+
+   async Task DoWorkAsync(CancellationToken ct)
+   {
+       ct.ThrowIfCancellationRequested(); // throw if already cancelled
+       await Task.Delay(2000, ct);        // throws OperationCanceledException if cancelled
+   }
+
+   Best practice: accept CancellationToken in all public async methods.
+
+================================================================================
+SECTION 8: EXCEPTION HANDLING
+================================================================================
+
+Q39: What is the difference between throw and throw ex?
+────────────────────────────────────────────────────────
+A: throw:     rethrows the CURRENT exception preserving the original stack trace.
+   throw ex:  rethrows, but RESETS the stack trace to this line (you lose origin info).
+
+   catch (Exception ex)
+   {
+       LogError(ex);
+       throw;     // preserves stack trace — CORRECT
+       // throw ex; // resets stack trace — WRONG (loses where it started)
+   }
+
+────────────────────────────────────────────────────────────────────────────────
+Q40: What is exception filtering (when clause)?
+────────────────────────────────────────────────
+A: The when clause adds a condition to a catch block. The exception is only
+   caught if the condition is true. The stack is NOT unwound if when is false,
+   meaning a debugger shows the original throw site.
+
+   catch (HttpException ex) when (ex.StatusCode == 404) { ... }
+   catch (HttpException ex) when (ex.StatusCode >= 500) { ... }
+
+   Benefit: more precise catching without nested if inside catch.
+
+────────────────────────────────────────────────────────────────────────────────
+Q41: What makes a good custom exception?
+──────────────────────────────────────────
+A: A good custom exception:
+   1. Inherits from Exception (or a more specific base)
+   2. Has a name ending in "Exception"
+   3. Carries domain-specific data as properties
+   4. Provides all three standard constructors for serialization compatibility
+
+   public class OrderNotFoundException : Exception
+   {
+       public int OrderId { get; }
+       public OrderNotFoundException(int id)
+           : base($"Order {id} not found.") => OrderId = id;
+       public OrderNotFoundException(int id, Exception inner)
+           : base($"Order {id} not found.", inner) => OrderId = id;
+   }
+
+================================================================================
+SECTION 9: MODERN C# FEATURES
+================================================================================
+
+Q42: What are records in C# 9?
+────────────────────────────────
+A: Records are reference types with value-based equality, immutability by default,
+   and a concise syntax.
+
+   public record Person(string Name, int Age); // positional record
+
+   var p1 = new Person("Alice", 30);
+   var p2 = new Person("Alice", 30);
+   p1 == p2  → true  (value equality — unlike class)
+   p1.ToString() → "Person { Name = Alice, Age = 30 }" (auto-generated)
+
+   Non-destructive mutation with 'with':
+   var p3 = p1 with { Age = 31 }; // new instance, p1 unchanged
+
+   record struct (C# 10): value type with value equality.
+
+   When to use records: immutable data objects, DTOs, value objects in DDD.
+
+────────────────────────────────────────────────────────────────────────────────
+Q43: What is pattern matching in C#?
+──────────────────────────────────────
+A: Pattern matching checks the shape/type/value of an object concisely.
+
+   Type pattern:       if (obj is string s) { ... }
+   Constant pattern:   if (x is null) { ... }
+   Relational pattern: if (age is > 18 and < 65) { ... }
+   Logical pattern:    if (x is not null and > 0) { ... }
+   Property pattern:   if (person is { Name: "Alice", Age: > 18 }) { ... }
+   Positional pattern: if (point is (0, 0)) { ... }
+   var pattern:        if (obj is var x) { ... } (always matches, useful in switch)
+
+   Switch expression (C# 8):
+   string label = score switch
+   {
+       >= 90 => "A",
+       >= 80 => "B",
+       >= 70 => "C",
+       _     => "F"
+   };
+
+────────────────────────────────────────────────────────────────────────────────
+Q44: What are tuples in C# 7?
+───────────────────────────────
+A: Tuples are lightweight, immutable data structures for grouping values
+   without creating a class.
+
+   // Unnamed tuple
+   var t = (1, "hello", 3.14);
+   Console.WriteLine(t.Item1); // 1
+
+   // Named tuple
+   (int Id, string Name) person = (1, "Alice");
+   Console.WriteLine(person.Name); // Alice
+
+   // Return multiple values
+   (int Min, int Max) GetRange(int[] arr) => (arr.Min(), arr.Max());
+   var (min, max) = GetRange(data); // deconstruction
+
+────────────────────────────────────────────────────────────────────────────────
+Q45: What are nullable reference types (C# 8)?
+────────────────────────────────────────────────
+A: With <Nullable>enable</Nullable> in the project, reference types are
+   NON-NULLABLE by default. You must add ? to allow null.
+
+   string  name  = null;   // warning: non-nullable assigned null
+   string? name2 = null;   // OK: explicitly nullable
+
+   The compiler warns you about potential NullReferenceExceptions.
+   Use: ?. (null-conditional), ?? (null-coalescing), ! (null-forgiving operator)
+
+   string? s = GetName();
+   int len   = s?.Length ?? 0;   // safe — no NullReferenceException
+   string forced = s!;            // tells compiler "I know it's not null" (risky)
+
+================================================================================
+SECTION 10: MEMORY & PERFORMANCE
+================================================================================
+
+Q46: How does garbage collection work in C#?
+─────────────────────────────────────────────
+A: The GC automatically manages heap memory in three generations:
+   Gen 0: new, short-lived objects (collected most frequently, fastest)
+   Gen 1: objects that survived Gen 0 (buffer between short/long lived)
+   Gen 2: long-lived objects (collected least frequently)
+
+   Large Object Heap (LOH): objects >= 85,000 bytes; always treated as Gen 2
+
+   GC is triggered when: Gen 0 is full, explicit GC.Collect(), system memory pressure.
+   GC.Collect() can be called but is almost never the right answer in production.
+   Objects with finalizers are promoted (slower) — use IDisposable instead.
+
+────────────────────────────────────────────────────────────────────────────────
+Q47: What is the difference between Dispose and Finalize?
+──────────────────────────────────────────────────────────
+A: Dispose (IDisposable.Dispose()):
+   • Called DETERMINISTICALLY by the developer (via using statement)
+   • Releases unmanaged resources immediately
+   • You control WHEN it runs
+
+   Finalize (~ClassName destructor):
+   • Called NON-DETERMINISTICALLY by the GC
+   • Only for objects that forgot to call Dispose
+   • Slower: object promoted to next generation, then cleaned up
+
+   Pattern: implement IDisposable and call GC.SuppressFinalize(this) in Dispose()
+   so the finalizer doesn't run (avoiding the extra GC cost).
+
+────────────────────────────────────────────────────────────────────────────────
+Q48: What are common causes of memory leaks in C#?
+────────────────────────────────────────────────────
+A: 1. Event subscriptions:     object subscribes to event but never unsubscribes
+                                → publisher holds a reference → subscriber not GC'd
+   2. Static collections:       items added to static List/Dict but never removed
+   3. Unmanaged resources:      forgetting Dispose() on streams, connections
+   4. Long-lived closures:       lambda captures a large object
+   5. Caches without eviction:  unbounded caches grow indefinitely
+   6. Thread.Sleep/spin loops:  threads keep large stacks alive
+
+   Tools: dotMemory, PerfView, Visual Studio Diagnostic Tools, CLRProfiler
+
+────────────────────────────────────────────────────────────────────────────────
+Q49: What is Span<T> and when should you use it?
+─────────────────────────────────────────────────
+A: Span<T> is a stack-allocated, ref struct that provides a VIEW over contiguous
+   memory (array, stack, unmanaged) WITHOUT copying or allocating on the heap.
+
+   int[] data = { 1, 2, 3, 4, 5, 6 };
+   Span<int> slice = data.AsSpan(1, 4);  // view of elements 1-4, no copy
+   slice[0] = 99;                         // modifies original array
+
+   Benefits:
+   • Zero heap allocation for slicing
+   • Works on arrays, strings, stack memory
+   • Used in hot paths (parsers, serializers)
+
+   Limitation: cannot be stored on the heap (no fields in class, no async methods)
+   Use Memory<T> for async scenarios.
+
+────────────────────────────────────────────────────────────────────────────────
+Q50: What is the difference between struct and class for performance?
+──────────────────────────────────────────────────────────────────────
+A: struct (value type):
+   • Allocated on STACK or inline in containing type (no heap allocation)
+   • No GC pressure
+   • Copied on assignment (can be costly for large structs)
+   • Cannot be null (unless Nullable<T>)
+   • Best for: small (< 16 bytes), immutable, frequently allocated data
+
+   class (reference type):
+   • Heap allocated, GC managed
+   • Reference shared (no copy overhead for large data)
+   • Can be null
+   • Best for: mutable objects, larger data, polymorphism
+
+   Guideline: use struct when it acts like a value (Point, Color, DateTime).
+
+================================================================================
+SECTION 11: DESIGN PATTERNS & SOLID
+================================================================================
+
+Q51: What are the SOLID principles?
+─────────────────────────────────────
+A: S — Single Responsibility: a class should have ONE reason to change
+   O — Open/Closed: open for extension, closed for modification (use inheritance/interfaces)
+   L — Liskov Substitution: subclasses must be substitutable for their base types
+   I — Interface Segregation: many small, focused interfaces > one fat interface
+   D — Dependency Inversion: depend on ABSTRACTIONS, not concrete implementations
+
+────────────────────────────────────────────────────────────────────────────────
+Q52: What is Dependency Injection?
+────────────────────────────────────
+A: DI is a technique where an object's dependencies are provided from OUTSIDE
+   (injected) rather than created internally.
+
+   // Without DI (tightly coupled)
+   class OrderService { private EmailSender _sender = new EmailSender(); }
+
+   // With DI (loosely coupled)
+   class OrderService
+   {
+       private readonly IEmailSender _sender;
+       public OrderService(IEmailSender sender) { _sender = sender; } // injected
+   }
+
+   Benefits:
+   • Easier testing (inject mocks)
+   • Easier to swap implementations
+   • Follows Dependency Inversion Principle
+
+   ASP.NET Core has a built-in DI container:
+     builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+
+────────────────────────────────────────────────────────────────────────────────
+Q53: What is the Repository pattern?
+──────────────────────────────────────
+A: Repository abstracts the data access layer behind an interface,
+   decoupling business logic from persistence concerns.
+
+   public interface IUserRepository
+   {
+       User? GetById(int id);
+       IEnumerable<User> GetAll();
+       void Add(User user);
+       void Delete(int id);
+   }
+
+   public class EfUserRepository : IUserRepository
+   {
+       private readonly AppDbContext _db;
+       public EfUserRepository(AppDbContext db) => _db = db;
+       public User? GetById(int id) => _db.Users.Find(id);
+       // ...
+   }
+
+   Benefits: testable (mock the interface), swappable (EF ↔ Dapper ↔ in-memory).
+
+────────────────────────────────────────────────────────────────────────────────
+Q54: What is the Singleton pattern and how do you implement it thread-safely?
+──────────────────────────────────────────────────────────────────────────────
+A: Singleton ensures only ONE instance of a class exists.
+
+   Thread-safe implementation using Lazy<T>:
+   public sealed class Config
+   {
+       private static readonly Lazy<Config> _instance =
+           new(() => new Config(), LazyThreadSafetyMode.ExecutionAndPublication);
+
+       public static Config Instance => _instance.Value;
+       private Config() { }
+       public string ConnectionString { get; } = "Server=...";
+   }
+
+   Or the double-check lock pattern:
+   private static Config? _inst;
+   private static readonly object _lock = new();
+   public static Config Instance
+   {
+       get { if (_inst is null) lock (_lock) { _inst ??= new Config(); } return _inst; }
+   }
+
+────────────────────────────────────────────────────────────────────────────────
+Q55: What is the Observer pattern? How do events relate to it?
+───────────────────────────────────────────────────────────────
+A: Observer: one object (subject/publisher) notifies many objects (observers/subscribers)
+   when its state changes, without knowing who the observers are.
+
+   C# events ARE the Observer pattern:
+   • event = publisher
+   • EventHandler delegates = observers
+
+   Use cases: UI events, domain events, message bus, reactive systems.
+
+================================================================================
+SECTION 12: COMMON INTERVIEW GOTCHAS
+================================================================================
+
+Q56: What is the output of this code?
+   int i = 0;
+   Console.WriteLine(i++);   // ?
+   Console.WriteLine(++i);   // ?
+──────────────────────────────────────
+A: i++ : post-increment — returns current value THEN increments
+   ++i : pre-increment  — increments THEN returns new value
+
+   Output: 0  (i is 0, then becomes 1)
+           2  (i becomes 2, then 2 is printed)
+
+────────────────────────────────────────────────────────────────────────────────
+Q57: What is the difference between Thread.Sleep(0) and Task.Yield()?
+───────────────────────────────────────────────────────────────────────
+A: Thread.Sleep(0): yields the OS thread, allows other threads of equal/higher
+   priority to run. BLOCKS the thread.
+
+   await Task.Yield(): asynchronously yields control back to the scheduler.
+   The remainder continues asynchronously. Does NOT block the thread.
+
+────────────────────────────────────────────────────────────────────────────────
+Q58: Can you override a static method in C#?
+──────────────────────────────────────────────
+A: No. Static methods belong to the type, not the instance.
+   They cannot be virtual or override.
+   You can HIDE a static method with 'new', but it's not polymorphic.
+
+   class Base    { public static string Info() => "Base";    }
+   class Derived { public new static string Info() => "Derived"; }
+   Base.Info()    → "Base"
+   Derived.Info() → "Derived"
+   (Base ref always calls Base.Info — no virtual dispatch)
+
+────────────────────────────────────────────────────────────────────────────────
+Q59: What is the difference between object, dynamic, and var?
+──────────────────────────────────────────────────────────────
+A: var:     compile-time type inference — type is FIXED at compile time
+   object:  base type of all types — loses type info, needs cast, compile-time safe
+   dynamic: type resolution at RUNTIME — no IntelliSense, bypasses type safety
+
+   var    x = 42;    x = "string"; // compile ERROR (type is int)
+   object y = 42;    y = "string"; // OK (but you lose int methods)
+   dynamic z = 42;   z = "string"; // OK (but runtime errors possible)
+
+   Use dynamic: for COM interop, reflection-heavy code, JSON with unknown structure.
+
+────────────────────────────────────────────────────────────────────────────────
+Q60: What happens when you call an async method without await?
+───────────────────────────────────────────────────────────────
+A: The method STARTS and returns a Task immediately. Without await, the caller
+   does not wait for it to finish and does not receive exceptions.
+
+   DoWorkAsync(); // fire and forget — exceptions are LOST
+
+   Correct: await DoWorkAsync();             // waits, exceptions propagate
+   Or:      _ = DoWorkAsync();               // explicit discard (still fire-and-forget)
+   Or:      var t = DoWorkAsync(); await t;  // same as first line
+
+================================================================================
+QUICK REFERENCE — THINGS TO MEMORIZE
+================================================================================
+
+Data types:
+  int   = 32-bit signed   (-2.1B to 2.1B)
+  long  = 64-bit signed
+  float = 32-bit float    (suffix f)    ~7 digits precision
+  double= 64-bit float                  ~15 digits precision
+  decimal=128-bit         (suffix m)    28-29 digits (use for money)
+  string= immutable reference type
+
+Common collections:
+  List<T>         → dynamic array, O(1) access, O(n) insert/remove middle
+  Dictionary<K,V> → hash table, O(1) avg get/set
+  HashSet<T>      → unique values, O(1) add/contains
+  Queue<T>        → FIFO (Enqueue/Dequeue)
+  Stack<T>        → LIFO (Push/Pop)
+  LinkedList<T>   → O(1) add/remove at head/tail, O(n) random access
+
+Access modifiers (most → least visible):
+  public > protected internal > protected > internal > private protected > private
+
+Exception best practices:
+  ✓ Catch specific, not Exception
+  ✓ Use throw; not throw ex;
+  ✓ Use finally / using for cleanup
+  ✓ TryParse over Parse, FirstOrDefault over First
+  ✗ Never swallow exceptions (empty catch)
+  ✗ Never use exceptions for flow control
+
+Async best practices:
+  ✓ async Task (not async void)
+  ✓ ConfigureAwait(false) in libraries
+  ✓ CancellationToken in all long-running async methods
+  ✓ Task.WhenAll for parallelism
+  ✗ Never .Result / .Wait() in async context
+
+================================================================================
+END OF INTERVIEW QUESTIONS
+================================================================================
