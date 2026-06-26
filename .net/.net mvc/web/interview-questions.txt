@@ -1,0 +1,1732 @@
+================================================================================
+         ASP.NET MVC (.NET FRAMEWORK) — INTERVIEW QUESTIONS (BASIC TO ADVANCED)
+         (With examples and answers)
+================================================================================
+
+HOW TO USE THIS FILE:
+  - Read each Q, think of your own answer first, then check the A.
+  - This file covers classic ASP.NET MVC (4/5) on the .NET Framework.
+  - Where relevant, differences from ASP.NET Core MVC are noted.
+  - Sections: Overview → MVC Pattern → Routing → Controllers →
+              Views & Razor → Model Binding & Validation →
+              Filters → Authentication & Authorization →
+              Entity Framework 6 → Bundling & Minification →
+              State Management → Areas → Security →
+              Performance → Testing → Advanced Topics
+
+================================================================================
+SECTION 1: OVERVIEW
+================================================================================
+
+Q1: What is ASP.NET MVC and how does it differ from ASP.NET Web Forms?
+────────────────────────────────────────────────────────────────────────
+A: ASP.NET MVC is a web framework by Microsoft built on top of ASP.NET that
+   implements the Model-View-Controller pattern to build web applications with
+   a clear separation of concerns.
+
+   MVC vs Web Forms:
+   ┌────────────────────┬────────────────────────────┬───────────────────────────┐
+   │ Feature            │ ASP.NET MVC                │ ASP.NET Web Forms         │
+   ├────────────────────┼────────────────────────────┼───────────────────────────┤
+   │ Pattern            │ MVC                        │ Event-driven (like WinForms)│
+   │ URL control        │ Full (clean URLs)           │ Limited (.aspx extension) │
+   │ State              │ Stateless by default        │ ViewState (hidden field)  │
+   │ Testability        │ Excellent (no page base)    │ Poor (tightly coupled)    │
+   │ HTML control       │ Full (no server controls)   │ Limited (server controls) │
+   │ Page lifecycle     │ Simple (action → view)      │ Complex (13 events)       │
+   │ TDD support        │ Yes                        │ Very difficult            │
+   │ SEO-friendly URLs  │ Yes                        │ Requires extra config     │
+   └────────────────────┴────────────────────────────┴───────────────────────────┘
+
+   ASP.NET MVC versions:
+   • MVC 1 (2009) — initial release
+   • MVC 2 (2010) — Areas, data annotations, async
+   • MVC 3 (2011) — Razor view engine, DI support, JSON binding
+   • MVC 4 (2012) — Web API, mobile features, async Task<ActionResult>
+   • MVC 5 (2013) — Attribute routing, Filters, OWIN/Katana, Bootstrap
+   • ASP.NET Core MVC — complete rewrite, cross-platform (.NET Core)
+
+────────────────────────────────────────────────────────────────────────────────
+Q2: What are the main components of ASP.NET MVC?
+──────────────────────────────────────────────────
+A: Three core components:
+
+   MODEL:
+   • Represents the application's data and business logic.
+   • Can be a simple POCO class, Entity Framework entity, or ViewModel.
+   • Contains data annotations for validation.
+   • Should be independent of the UI.
+
+   VIEW:
+   • Razor templates (.cshtml) that render HTML.
+   • Should contain ONLY presentation logic.
+   • Receives data from the controller via the model or ViewBag/ViewData/TempData.
+   • Must not contain business logic.
+
+   CONTROLLER:
+   • Handles incoming HTTP requests.
+   • Calls services/models for data and logic.
+   • Selects and returns the appropriate View with data.
+   • Lives in the Controllers folder; class name ends with "Controller".
+
+   Supporting components:
+   • Routing — maps URLs to controller actions.
+   • Filters — cross-cutting concerns (auth, logging, caching).
+   • ActionResult — abstraction for the response (view, redirect, JSON, file).
+   • Model Binder — maps request data to action parameters.
+   • View Engine — transforms Razor templates to HTML (Razor or ASPX).
+
+────────────────────────────────────────────────────────────────────────────────
+Q3: Explain the ASP.NET MVC request pipeline.
+──────────────────────────────────────────────
+A: Step-by-step flow:
+
+   1. Browser sends HTTP request (e.g., GET /Products/Details/5).
+   2. IIS receives the request and passes it to the ASP.NET runtime.
+   3. HttpApplication (Global.asax) fires Application_BeginRequest and other events.
+   4. UrlRoutingModule intercepts the request and matches it to a route.
+   5. MvcRouteHandler and MvcHandler are invoked.
+   6. IControllerFactory creates the appropriate Controller instance.
+   7. Authorization Filters run — short-circuit if not authorized.
+   8. Model Binding — maps route values, query string, form data to parameters.
+   9. Action Filters run (OnActionExecuting).
+   10. Action method executes and returns an ActionResult.
+   11. Action Filters run (OnActionExecuted).
+   12. Result Filters run (OnResultExecuting).
+   13. ActionResult.ExecuteResult() is called:
+       • ViewResult → View Engine renders the Razor template to HTML.
+       • JsonResult → JSON serialization.
+       • RedirectResult → sets Location header.
+   14. Result Filters run (OnResultExecuted).
+   15. Response is sent to the client.
+
+================================================================================
+SECTION 2: MVC PATTERN
+================================================================================
+
+Q4: What is the MVC design pattern? What are its benefits?
+────────────────────────────────────────────────────────────
+A: MVC (Model-View-Controller) is a software architectural pattern that separates
+   an application into three interconnected components.
+
+   Model:       Manages data, business rules, and logic. Notifies views of changes.
+   View:        Displays the model data to the user. Sends user actions to controller.
+   Controller:  Responds to user input, updates the model, selects the view.
+
+   Benefits:
+   • Separation of Concerns — each component has one responsibility.
+   • Testability — controllers and models can be unit-tested without a browser.
+   • Maintainability — change the UI without changing business logic and vice versa.
+   • Parallel development — teams can work on Model, View, and Controller separately.
+   • Clean URLs — routing decouples URLs from file system structure.
+   • No ViewState — smaller page size, stateless, RESTful.
+
+────────────────────────────────────────────────────────────────────────────────
+Q5: What is a ViewModel and why should you use it?
+────────────────────────────────────────────────────
+A: A ViewModel is a class specifically designed for a view. It contains only the
+   data and behavior that the view needs — it is NOT the domain entity.
+
+   Why use ViewModels:
+   • A view may need data from MULTIPLE models (Product + Categories + RelatedItems).
+   • A view may need COMPUTED properties (FullName = FirstName + LastName).
+   • Prevents over-posting — only expose fields meant to be bound.
+   • Keeps domain models clean — no display-only attributes on entities.
+   • Decouples view from database schema changes.
+
+   Example:
+     // Domain entity
+     public class Product
+     {
+         public int Id { get; set; }
+         public string Name { get; set; }
+         public decimal Cost { get; set; }         // internal, should not expose
+         public decimal Price { get; set; }
+         public int CategoryId { get; set; }
+     }
+
+     // ViewModel for the Create Product page
+     public class ProductCreateViewModel
+     {
+         [Required]
+         [StringLength(100)]
+         public string Name { get; set; }
+
+         [Required]
+         [Range(0.01, 9999.99)]
+         public decimal Price { get; set; }
+
+         [Required]
+         public int CategoryId { get; set; }
+
+         public IEnumerable<SelectListItem> Categories { get; set; }  // for dropdown
+     }
+
+================================================================================
+SECTION 3: ROUTING
+================================================================================
+
+Q6: What is Routing in ASP.NET MVC?
+──────────────────────────────────────
+A: Routing maps incoming HTTP URL patterns to controller actions. It also
+   generates outbound URLs for HTML links.
+
+   Routing is configured in RouteConfig.cs (App_Start folder) and registered
+   in Global.asax:
+
+     // RouteConfig.cs
+     public class RouteConfig
+     {
+         public static void RegisterRoutes(RouteCollection routes)
+         {
+             routes.IgnoreRoute("{resource}.axd/{*pathInfo}");
+
+             routes.MapRoute(
+                 name:    "Default",
+                 url:     "{controller}/{action}/{id}",
+                 defaults: new { controller = "Home", action = "Index", id = UrlParameter.Optional }
+             );
+         }
+     }
+
+     // Global.asax
+     protected void Application_Start()
+     {
+         RouteConfig.RegisterRoutes(RouteTable.Routes);
+     }
+
+   How URL matching works:
+   /Products/Details/5
+   → controller = "Products"
+   → action     = "Details"
+   → id         = "5"
+   → Invokes ProductsController.Details(5)
+
+   Routes are matched IN ORDER — first match wins. Put specific routes before
+   the catch-all Default route.
+
+────────────────────────────────────────────────────────────────────────────────
+Q7: What is Attribute Routing (MVC 5)?
+────────────────────────────────────────
+A: Attribute Routing (introduced in MVC 5) lets you define routes directly on
+   controllers and actions using attributes instead of RouteConfig.cs.
+
+   Enable in RouteConfig.cs:
+     routes.MapMvcAttributeRoutes();  // must be BEFORE convention-based routes
+
+   Usage:
+     [RoutePrefix("products")]
+     public class ProductsController : Controller
+     {
+         [Route("")]                            // GET /products
+         public ActionResult Index() { ... }
+
+         [Route("{id:int}")]                    // GET /products/5
+         public ActionResult Details(int id) { ... }
+
+         [Route("by-name/{name:alpha}")]        // GET /products/by-name/widget
+         public ActionResult ByName(string name) { ... }
+
+         [Route("~/help")]                      // GET /help (overrides prefix)
+         public ActionResult Help() { ... }
+     }
+
+   Route constraints (same as Core):
+   • {id:int}    — integers only
+   • {id:guid}   — GUIDs only
+   • {name:alpha}— letters only
+   • {id:min(1)} — minimum value
+
+   Benefits over convention routing:
+   • Routes visible alongside the action (no need to look at RouteConfig).
+   • More expressive URL design.
+   • Easier to manage in large applications.
+
+────────────────────────────────────────────────────────────────────────────────
+Q8: What is the difference between Html.ActionLink and Url.Action?
+───────────────────────────────────────────────────────────────────
+A: Both generate URLs using the routing table — not hardcoded strings.
+
+   Html.ActionLink — generates a complete <a href="..."> anchor element:
+     @Html.ActionLink("View Details", "Details", "Products", new { id = 5 }, null)
+     // Output: <a href="/Products/Details/5">View Details</a>
+
+   Url.Action — generates ONLY the URL string (no HTML):
+     @Url.Action("Details", "Products", new { id = 5 })
+     // Output: /Products/Details/5
+
+     // Useful when building URLs for:
+     // - JavaScript: var url = '@Url.Action("Create", "Products")';
+     // - form action: <form action="@Url.Action("Create", "Products")">
+     // - redirects: return Redirect(Url.Action("Index", "Products"));
+
+   Always prefer Html.ActionLink / Url.Action over hardcoded URLs — if your
+   routes change, generated URLs update automatically.
+
+================================================================================
+SECTION 4: CONTROLLERS
+================================================================================
+
+Q9: What is a Controller in ASP.NET MVC?
+──────────────────────────────────────────
+A: A Controller is a class that:
+   • Inherits from System.Web.Mvc.Controller.
+   • Named with a "Controller" suffix (ProductsController → route segment "Products").
+   • Contains action methods that handle HTTP requests.
+   • Returns ActionResult objects.
+
+   Controller base class provides:
+   • View()                   — render a Razor view
+   • PartialView()            — render a partial view
+   • Json()                   — return JSON
+   • Redirect() / RedirectToAction() / RedirectToRoute()
+   • File()                   — return a file
+   • Content()                — return plain text/HTML string
+   • HttpNotFound()           — 404
+   • HttpUnauthorizedResult() — 401
+   • ViewBag, ViewData, TempData
+   • ModelState
+   • Request, Response, Session, Server, User
+
+   Example:
+     public class ProductsController : Controller
+     {
+         private readonly IProductService _svc;
+
+         public ProductsController(IProductService svc)
+         {
+             _svc = svc;
+         }
+
+         // GET: /Products
+         public ActionResult Index()
+         {
+             var products = _svc.GetAll();
+             return View(products);
+         }
+
+         // GET: /Products/Details/5
+         public ActionResult Details(int id)
+         {
+             var product = _svc.GetById(id);
+             if (product == null) return HttpNotFound();
+             return View(product);
+         }
+
+         // POST: /Products/Create
+         [HttpPost]
+         [ValidateAntiForgeryToken]
+         public ActionResult Create(ProductViewModel vm)
+         {
+             if (!ModelState.IsValid) return View(vm);
+             _svc.Create(vm);
+             return RedirectToAction("Index");
+         }
+     }
+
+────────────────────────────────────────────────────────────────────────────────
+Q10: What are ActionResult types in ASP.NET MVC?
+──────────────────────────────────────────────────
+A: ActionResult is the abstract base class for all action results.
+
+   View results:
+   • ViewResult          — renders a .cshtml view (return View())
+   • PartialViewResult   — renders a partial view (return PartialView())
+   • JsonResult          — serializes object to JSON (return Json(obj))
+   • ContentResult       — plain text/HTML (return Content("text"))
+   • EmptyResult         — does nothing (200 OK, empty body)
+
+   Redirect results:
+   • RedirectResult                — 302 to absolute URL
+   • RedirectToRouteResult         — 302 by route name / values
+   • RedirectToActionResult (via RedirectToAction) — 302 to another action
+
+   File results:
+   • FileResult              — base class
+   • FileContentResult       — byte array
+   • FileStreamResult        — stream
+   • FilePathResult          — server file path
+
+   HTTP results:
+   • HttpStatusCodeResult    — any HTTP status code
+   • HttpNotFoundResult      — 404 (inherits HttpStatusCodeResult)
+   • HttpUnauthorizedResult  — 401
+
+   Example:
+     public ActionResult Download(int id)
+     {
+         var bytes = _svc.GetFileBytesById(id);
+         return File(bytes, "application/pdf", "report.pdf");
+     }
+
+────────────────────────────────────────────────────────────────────────────────
+Q11: What is the difference between ActionResult and void in an action?
+───────────────────────────────────────────────────────────────────────
+A: Return ActionResult — the framework calls ExecuteResult() on whatever you return.
+   You explicitly control the response (view, JSON, redirect, file, status code).
+
+   Return void — ASP.NET MVC renders the view matching the action name by convention.
+   Equivalent to returning View() with no argument.
+   Less flexible — cannot return different results based on conditions.
+
+   Best practice: always return ActionResult (or a specific type like ViewResult,
+   JsonResult). Returning void hides intent and makes testing harder.
+
+────────────────────────────────────────────────────────────────────────────────
+Q12: What are HTTP method attributes [HttpGet], [HttpPost], etc.?
+─────────────────────────────────────────────────────────────────
+A: These attributes restrict which HTTP method triggers an action.
+
+   [HttpGet]    — only GET requests (default if no attribute is specified)
+   [HttpPost]   — only POST requests
+   [HttpPut]    — only PUT requests
+   [HttpDelete] — only DELETE requests
+   [HttpPatch]  — only PATCH requests (MVC 5)
+   [AcceptVerbs("GET", "POST")] — multiple methods
+
+   Example (CRUD pattern):
+     // GET: /Products/Create  — show form
+     [HttpGet]
+     public ActionResult Create()
+     {
+         return View(new ProductViewModel());
+     }
+
+     // POST: /Products/Create — process form
+     [HttpPost]
+     [ValidateAntiForgeryToken]
+     public ActionResult Create(ProductViewModel vm)
+     {
+         if (!ModelState.IsValid) return View(vm);
+         _svc.Create(vm);
+         return RedirectToAction("Index");
+     }
+
+   Important: without [HttpPost], any HTTP method reaches the action.
+   Always restrict actions that modify data to POST/PUT/DELETE.
+
+================================================================================
+SECTION 5: VIEWS AND RAZOR
+================================================================================
+
+Q13: What is the Razor View Engine?
+─────────────────────────────────────
+A: Razor is the default view engine in ASP.NET MVC 3+. It allows mixing C# code
+   with HTML in .cshtml files using a clean, minimal syntax.
+
+   Key syntax:
+   • @expression          — inline C# expression (HTML-encoded output)
+   • @{ code block }      — C# code that produces no output
+   • @if / @else          — conditional
+   • @foreach / @for      — loops
+   • @model Type          — declare the view's model type
+   • @Model               — access the model instance
+   • @Html.*              — HTML Helpers
+   • @Url.*               — URL Helpers
+   • @section Name { }    — define a content section
+   • @RenderSection()     — render a section in layout
+   • @RenderBody()        — render child content in layout
+   • @Html.Partial()      — render a partial view
+
+   Example:
+     @model IEnumerable<Product>
+     @{
+         ViewBag.Title = "All Products";
+         Layout = "~/Views/Shared/_Layout.cshtml";
+     }
+     <h1>Products</h1>
+     @if (!Model.Any())
+     {
+         <p>No products found.</p>
+     }
+     else
+     {
+         <table>
+             @foreach (var p in Model)
+             {
+                 <tr>
+                     <td>@p.Name</td>
+                     <td>@p.Price.ToString("C")</td>
+                     <td>@Html.ActionLink("Edit", "Edit", new { id = p.Id })</td>
+                 </tr>
+             }
+         </table>
+     }
+
+   Razor vs ASPX (Web Forms engine):
+   • Razor: @Model.Name         — cleaner, less XML
+   • ASPX:  <%: Model.Name %>   — verbose Web Forms syntax
+
+────────────────────────────────────────────────────────────────────────────────
+Q14: What is the difference between ViewBag, ViewData, and TempData?
+─────────────────────────────────────────────────────────────────────
+A: All three pass data from Controller to View.
+
+   ViewData:
+   • Type: ViewDataDictionary (implements IDictionary<string, object>).
+   • Key-value pairs; requires casting when reading.
+   • Scope: current request only.
+     // Controller:
+     ViewData["Title"] = "Products Page";
+     ViewData["Count"] = products.Count;
+     // View:
+     <h1>@ViewData["Title"]</h1>
+     <p>Total: @((int)ViewData["Count"])</p>
+
+   ViewBag:
+   • Dynamic wrapper over ViewData — same underlying store.
+   • No casting needed (dynamic type; resolved at runtime).
+   • Scope: current request only.
+     // Controller:
+     ViewBag.Title = "Products Page";
+     // View:
+     <h1>@ViewBag.Title</h1>
+
+   TempData:
+   • Type: TempDataDictionary, backed by Session.
+   • Survives ONE redirect — data is marked for deletion after first read.
+   • Use Keep() to retain; Peek() to read without marking for deletion.
+   • Scope: current request + next request.
+     // Controller (before redirect):
+     TempData["SuccessMessage"] = "Product saved successfully!";
+     return RedirectToAction("Index");
+     // Controller after redirect (or View):
+     string msg = TempData["SuccessMessage"] as string;
+
+   Best practice: use strongly-typed ViewModel passed to View() when possible.
+   Use TempData for flash messages after redirects (PRG pattern).
+
+────────────────────────────────────────────────────────────────────────────────
+Q15: What is a Layout page in ASP.NET MVC?
+────────────────────────────────────────────
+A: A Layout page (_Layout.cshtml) is a shared master template for all views —
+   defines the common HTML structure (header, nav, footer).
+
+   _Layout.cshtml (Views/Shared/):
+     <!DOCTYPE html>
+     <html>
+     <head>
+         <title>@ViewBag.Title - My App</title>
+         @Styles.Render("~/Content/css")
+     </head>
+     <body>
+         <nav>...</nav>
+         <div class="container">
+             @RenderBody()            <!-- child view content rendered here -->
+         </div>
+         @RenderSection("Scripts", required: false)
+         @Scripts.Render("~/bundles/jquery")
+     </body>
+     </html>
+
+   Child view:
+     @{
+         Layout = "~/Views/Shared/_Layout.cshtml";
+         ViewBag.Title = "Products";
+     }
+     <h1>Products</h1>
+     ...
+     @section Scripts {
+         <script src="~/Scripts/products.js"></script>
+     }
+
+   _ViewStart.cshtml (auto-executed before every view, sets default layout):
+     @{ Layout = "~/Views/Shared/_Layout.cshtml"; }
+
+   _ViewImports does not exist in classic MVC — use @using directives per view
+   or add globally via web.config <namespaces> section.
+
+────────────────────────────────────────────────────────────────────────────────
+Q16: What are HTML Helpers in ASP.NET MVC?
+────────────────────────────────────────────
+A: HTML Helpers are C# methods on HtmlHelper that generate HTML markup from Razor.
+   They provide type-safety and leverage routing.
+
+   Common helpers:
+   @Html.TextBoxFor(m => m.Name)                    → <input type="text" name="Name">
+   @Html.TextAreaFor(m => m.Description, 5, 60, null)
+   @Html.PasswordFor(m => m.Password)
+   @Html.CheckBoxFor(m => m.IsActive)
+   @Html.RadioButtonFor(m => m.Gender, "M")
+   @Html.DropDownListFor(m => m.CategoryId, Model.Categories, "-- Select --")
+   @Html.HiddenFor(m => m.Id)
+   @Html.LabelFor(m => m.Name)
+   @Html.ValidationMessageFor(m => m.Name, "", new { @class = "text-danger" })
+   @Html.ValidationSummary(true, "Please fix errors:")
+   @Html.ActionLink("Edit", "Edit", new { id = item.Id })
+   @Html.BeginForm("Create", "Products", FormMethod.Post)
+
+   Strongly-typed helpers (preferred — use lambda expressions):
+   @Html.TextBoxFor(m => m.Name)       — ties to model property, respects attributes
+   @Html.TextBox("Name")               — weakly typed (string key)
+
+   The ForXxx variants are always preferred:
+   • Compile-time checking of property names.
+   • Automatically populate name, id, value attributes correctly.
+   • Validation message helpers work with ModelState.
+
+────────────────────────────────────────────────────────────────────────────────
+Q17: What are Partial Views and when should you use them?
+──────────────────────────────────────────────────────────
+A: A Partial View is a reusable Razor template rendered inside another view.
+   Convention: prefix name with underscore (_ProductCard.cshtml).
+
+   Render in a view:
+     @Html.Partial("_ProductCard", product)
+     @Html.PartialAsync("_ProductCard", product)  -- async (MVC 5)
+     @{ Html.RenderPartial("_ProductCard", product); }      -- writes directly to response
+
+   Render from a controller action (PartialViewResult):
+     public ActionResult GetCard(int id)
+     {
+         var product = _svc.GetById(id);
+         return PartialView("_ProductCard", product);
+     }
+     // Called via AJAX to replace a section of the page dynamically.
+
+   Use partial views for:
+   • Repeated HTML fragments (product cards in a grid, nav menu items).
+   • AJAX-updateable page sections.
+   • Breaking large views into manageable pieces.
+
+   Difference from Html.Action (Child Action):
+   • Partial: renders a view template directly — no controller action involved.
+   • Html.Action: calls a controller action, which returns a PartialView.
+     @Html.Action("RecentOrders", "Orders")  — invokes OrdersController.RecentOrders()
+
+================================================================================
+SECTION 6: MODEL BINDING AND VALIDATION
+================================================================================
+
+Q18: What is Model Binding in ASP.NET MVC?
+────────────────────────────────────────────
+A: Model Binding automatically maps HTTP request data (route values, query string,
+   form POST body, JSON body) to action method parameters or model properties.
+
+   Default binding sources (in priority order):
+   1. Form POST values (Request.Form)
+   2. Route data (RouteData.Values)
+   3. Query string (Request.QueryString)
+   4. File uploads (Request.Files)
+
+   Simple parameter binding:
+     // GET /Products/Details?id=5
+     public ActionResult Details(int id) { ... }  // id bound from query/route
+
+   Complex object binding:
+     // POST /Products/Create (form fields: Name, Price, CategoryId)
+     [HttpPost]
+     public ActionResult Create(ProductViewModel vm) { ... }
+     // MVC binds each form field to the matching property name
+
+   [Bind] attribute — whitelist/blacklist properties:
+     public ActionResult Create([Bind(Include = "Name,Price,CategoryId")] Product p)
+     // Only Name, Price, CategoryId are bound — prevents over-posting
+
+     public ActionResult Edit([Bind(Exclude = "CreatedAt,CreatedBy")] Product p)
+     // All properties EXCEPT CreatedAt and CreatedBy are bound
+
+   Custom Model Binder — implement IModelBinder:
+     public class MoneyBinder : IModelBinder
+     {
+         public object BindModel(ControllerContext ctx, ModelBindingContext bindCtx)
+         {
+             var value = bindCtx.ValueProvider.GetValue(bindCtx.ModelName);
+             return decimal.Parse(value.AttemptedValue.Replace("$", ""));
+         }
+     }
+     // Register: ModelBinders.Binders.Add(typeof(decimal), new MoneyBinder());
+
+────────────────────────────────────────────────────────────────────────────────
+Q19: How does Model Validation work in ASP.NET MVC?
+─────────────────────────────────────────────────────
+A: After model binding, MVC runs validation. Results go into ModelState.
+   Check ModelState.IsValid in the action before saving.
+
+   DATA ANNOTATION ATTRIBUTES:
+     public class RegisterViewModel
+     {
+         [Required(ErrorMessage = "Name is required")]
+         [StringLength(100, MinimumLength = 2)]
+         [Display(Name = "Full Name")]
+         public string Name { get; set; }
+
+         [Required]
+         [EmailAddress]
+         public string Email { get; set; }
+
+         [Required]
+         [DataType(DataType.Password)]
+         [StringLength(100, MinimumLength = 8)]
+         public string Password { get; set; }
+
+         [Compare("Password", ErrorMessage = "Passwords do not match")]
+         [Display(Name = "Confirm Password")]
+         public string ConfirmPassword { get; set; }
+
+         [Range(18, 100, ErrorMessage = "Must be 18 or older")]
+         public int Age { get; set; }
+     }
+
+   Controller:
+     [HttpPost]
+     [ValidateAntiForgeryToken]
+     public ActionResult Register(RegisterViewModel vm)
+     {
+         if (!ModelState.IsValid)
+         {
+             return View(vm);  // re-show form with errors
+         }
+         _userService.Register(vm);
+         return RedirectToAction("Dashboard");
+     }
+
+   Display errors in view:
+     @Html.ValidationSummary(false, "Please fix the following:")
+     @Html.ValidationMessageFor(m => m.Email, "", new { @class = "text-danger" })
+
+   CLIENT-SIDE VALIDATION (automatic with jQuery Validate):
+     In BundleConfig.cs register:
+       bundles.Add(new ScriptBundle("~/bundles/jqueryval")
+           .Include("~/Scripts/jquery.validate*"));
+     In view (or layout):
+       @Scripts.Render("~/bundles/jqueryval")
+     Html helpers emit data-val-* attributes that jQuery Validate reads.
+
+────────────────────────────────────────────────────────────────────────────────
+Q20: What is the PRG (Post-Redirect-Get) pattern?
+───────────────────────────────────────────────────
+A: PRG prevents duplicate form submissions when the user refreshes after a POST.
+
+   Problem without PRG:
+   1. User fills form → POST /Products/Create
+   2. Server processes → returns View directly (200 OK)
+   3. User hits F5 (refresh) → browser re-sends the POST → duplicate data!
+
+   With PRG:
+   1. User fills form → POST /Products/Create
+   2. Server processes → RedirectToAction("Index")   (302)
+   3. Browser follows redirect → GET /Products/Index (new request)
+   4. User hits F5 → re-sends GET /Products/Index — safe, no duplicate.
+
+   Implementation:
+     [HttpPost]
+     [ValidateAntiForgeryToken]
+     public ActionResult Create(ProductViewModel vm)
+     {
+         if (!ModelState.IsValid) return View(vm);
+         _svc.Create(vm);
+         TempData["Success"] = "Product created!";
+         return RedirectToAction("Index");   // ← PRG redirect
+     }
+
+     public ActionResult Index()
+     {
+         ViewBag.Message = TempData["Success"];  // read flash message
+         return View(_svc.GetAll());
+     }
+
+================================================================================
+SECTION 7: FILTERS
+================================================================================
+
+Q21: What are Filters in ASP.NET MVC and what are the types?
+──────────────────────────────────────────────────────────────
+A: Filters inject cross-cutting logic into the request pipeline at specific points.
+
+   4 Filter Types (in execution order):
+
+   1. AUTHORIZATION FILTERS (IAuthorizationFilter):
+      • Run FIRST — before anything else.
+      • Short-circuit the request if not authorized.
+      • Examples: [Authorize], [RequireHttps], custom role filters.
+      Methods: OnAuthorization()
+
+   2. ACTION FILTERS (IActionFilter):
+      • Run immediately before/after the action method.
+      • Most commonly used filter type.
+      • Examples: [OutputCache], custom logging, model validation enforcement.
+      Methods: OnActionExecuting(), OnActionExecuted()
+
+   3. RESULT FILTERS (IResultFilter):
+      • Run before/after the ActionResult executes.
+      • Examples: adding response headers, compressing output.
+      Methods: OnResultExecuting(), OnResultExecuted()
+
+   4. EXCEPTION FILTERS (IExceptionFilter):
+      • Run when an unhandled exception occurs in the pipeline.
+      • Examples: [HandleError], custom error logging.
+      Methods: OnException()
+
+   SCOPE (where applied):
+   • Global  — FilterConfig.cs → filters.Add(new MyFilter())
+   • Class   — [MyFilter] on controller class
+   • Method  — [MyFilter] on action method
+
+   Execution order for multiple filters:
+   Global → Controller → Action (OnExecuting phase)
+   Action → Controller → Global (OnExecuted phase — reverse order)
+
+────────────────────────────────────────────────────────────────────────────────
+Q22: What is the [Authorize] filter?
+──────────────────────────────────────
+A: [Authorize] is a built-in authorization filter that restricts access to
+   authenticated users (or specific roles/users).
+
+   Usage:
+     [Authorize]                                    // must be authenticated
+     [Authorize(Roles = "Admin")]                   // must be in Admin role
+     [Authorize(Roles = "Admin,Manager")]           // Admin OR Manager
+     [Authorize(Users = "alice,bob")]               // specific users only
+
+   [AllowAnonymous] — overrides [Authorize] on specific actions:
+     [Authorize]
+     public class AccountController : Controller
+     {
+         [AllowAnonymous]           // overrides controller-level [Authorize]
+         public ActionResult Login() { ... }
+
+         public ActionResult Dashboard() { ... }   // still requires auth
+     }
+
+   Apply globally (to all controllers):
+     // FilterConfig.cs
+     filters.Add(new AuthorizeAttribute());
+     // Then use [AllowAnonymous] on public actions.
+
+   Custom authorize filter:
+     public class AdminOnlyAttribute : AuthorizeAttribute
+     {
+         protected override bool AuthorizeCore(HttpContextBase ctx)
+         {
+             return ctx.User.Identity.IsAuthenticated &&
+                    ctx.User.IsInRole("Admin");
+         }
+
+         protected override void HandleUnauthorizedRequest(AuthorizationContext ctx)
+         {
+             ctx.Result = new RedirectToRouteResult(new RouteValueDictionary(
+                 new { controller = "Account", action = "AccessDenied" }));
+         }
+     }
+
+────────────────────────────────────────────────────────────────────────────────
+Q23: What is [HandleError] filter?
+────────────────────────────────────
+A: [HandleError] is an exception filter that renders a friendly error view
+   when an unhandled exception occurs in a controller action.
+
+   Enable (Web.config):
+     <system.web>
+       <customErrors mode="On" />
+     </system.web>
+
+   Register globally (FilterConfig.cs):
+     filters.Add(new HandleErrorAttribute());
+
+   Default behavior:
+   • Catches all exceptions.
+   • Renders ~/Views/Shared/Error.cshtml.
+   • Sets HTTP 500 response.
+
+   Custom error pages:
+     [HandleError(ExceptionType = typeof(SqlException), View = "DatabaseError")]
+     [HandleError(ExceptionType = typeof(UnauthorizedAccessException), View = "Forbidden")]
+     public class ProductsController : Controller { ... }
+
+   Limitation: only works for exceptions in controller actions (not 404, not
+   exceptions in filters or global code). Use Application_Error in Global.asax
+   or custom HttpModules for broader coverage.
+
+================================================================================
+SECTION 8: AUTHENTICATION AND AUTHORIZATION
+================================================================================
+
+Q24: How does Forms Authentication work in ASP.NET MVC?
+─────────────────────────────────────────────────────────
+A: Forms Authentication is the classic authentication mechanism in ASP.NET —
+   uses an encrypted cookie to track authenticated users.
+
+   Configure (Web.config):
+     <system.web>
+       <authentication mode="Forms">
+         <forms loginUrl="~/Account/Login"
+                timeout="60"
+                slidingExpiration="true"
+                cookieName=".MYAUTH" />
+       </authentication>
+     </system.web>
+
+   Login:
+     [HttpPost]
+     [ValidateAntiForgeryToken]
+     public ActionResult Login(LoginViewModel vm, string returnUrl)
+     {
+         if (!ModelState.IsValid) return View(vm);
+
+         if (_userService.ValidateUser(vm.Email, vm.Password))
+         {
+             FormsAuthentication.SetAuthCookie(vm.Email, vm.RememberMe);
+             return RedirectToLocal(returnUrl) ?? RedirectToAction("Index", "Home");
+         }
+         ModelState.AddModelError("", "Invalid email or password.");
+         return View(vm);
+     }
+
+   Logout:
+     public ActionResult Logout()
+     {
+         FormsAuthentication.SignOut();
+         return RedirectToAction("Login");
+     }
+
+   The auth cookie is sent with every request. ASP.NET decrypts it and sets
+   HttpContext.User (FormsIdentity) and Thread.CurrentPrincipal.
+
+────────────────────────────────────────────────────────────────────────────────
+Q25: What is ASP.NET Identity in MVC 5?
+─────────────────────────────────────────
+A: ASP.NET Identity is the membership system introduced in MVC 5 (replacing the
+   older SqlMembershipProvider). It provides user management, password hashing,
+   roles, claims, and external login (OAuth).
+
+   Core components:
+   • ApplicationUser (inherits IdentityUser) — user entity, extensible.
+   • UserManager<TUser> — creates, updates, deletes users, validates passwords,
+     generates tokens.
+   • RoleManager<TRole> — manages roles.
+   • SignInManager<TUser> — cookie sign-in/sign-out, two-factor auth.
+   • ApplicationDbContext (inherits IdentityDbContext) — EF storage.
+
+   Common operations:
+     // Create user
+     var user = new ApplicationUser { UserName = "alice", Email = "a@b.com" };
+     var result = await UserManager.CreateAsync(user, "P@ssword1");
+
+     // Sign in
+     await SignInManager.PasswordSignInAsync(email, password, isPersistent, lockoutOnFailure);
+
+     // Sign out
+     AuthenticationManager.SignOut(DefaultAuthenticationTypes.ApplicationCookie);
+
+     // Add to role
+     await UserManager.AddToRoleAsync(user.Id, "Admin");
+
+     // Check role
+     bool isAdmin = User.IsInRole("Admin");
+
+     // Get current user
+     string userId = User.Identity.GetUserId();
+
+   Identity uses OWIN (Open Web Interface for .NET) middleware — the startup
+   configuration lives in App_Start/Startup.Auth.cs.
+
+================================================================================
+SECTION 9: ENTITY FRAMEWORK 6
+================================================================================
+
+Q26: What is Entity Framework 6 (EF6)?
+────────────────────────────────────────
+A: EF6 is the classic ORM (Object-Relational Mapper) for the .NET Framework.
+   It maps C# classes to database tables and lets you query and manipulate data
+   using LINQ without writing SQL.
+
+   Development approaches:
+   • Code First  — define C# classes → EF generates the DB schema.
+   • Database First — existing DB → EF generates entity classes from the schema.
+   • Model First — designer creates EDMX model → generates both DB and classes.
+
+   Code First example:
+     public class Product
+     {
+         public int Id { get; set; }
+         [Required, StringLength(100)]
+         public string Name { get; set; }
+         public decimal Price { get; set; }
+         public int CategoryId { get; set; }
+         public virtual Category Category { get; set; }  // navigation property
+     }
+
+     public class AppDbContext : DbContext
+     {
+         public AppDbContext() : base("DefaultConnection") { }
+         public DbSet<Product> Products { get; set; }
+         public DbSet<Category> Categories { get; set; }
+
+         protected override void OnModelCreating(DbModelBuilder mb)
+         {
+             mb.Entity<Product>()
+               .HasRequired(p => p.Category)
+               .WithMany(c => c.Products)
+               .HasForeignKey(p => p.CategoryId);
+         }
+     }
+
+   Migrations:
+     Enable-Migrations
+     Add-Migration AddProductTable
+     Update-Database
+
+────────────────────────────────────────────────────────────────────────────────
+Q27: What is the difference between eager, lazy, and explicit loading in EF6?
+──────────────────────────────────────────────────────────────────────────────
+A: EAGER LOADING — load related entities immediately with Include():
+     var orders = db.Orders
+         .Include(o => o.Customer)
+         .Include(o => o.Items.Select(i => i.Product))
+         .ToList();
+     // Single SQL JOIN query. Related data immediately available.
+
+   LAZY LOADING — related data loaded automatically when accessed.
+     • Navigation properties must be virtual.
+     • EF generates a proxy class; accessing a virtual nav property fires a query.
+     • Risk: N+1 problem — 1 query for orders + 1 for each order's customer.
+     // Enable (default in EF6):
+     db.Configuration.LazyLoadingEnabled = true;  // default true
+     // Access:
+     var order = db.Orders.First();
+     var name = order.Customer.Name;  // separate query fires here
+
+   EXPLICIT LOADING — manually load related data on demand:
+     var order = db.Orders.First();
+     db.Entry(order).Reference(o => o.Customer).Load();
+     db.Entry(order).Collection(o => o.Items).Load();
+
+   Best practice: use eager loading (Include) for known relationships.
+   Disable lazy loading in production-critical paths to avoid N+1:
+     db.Configuration.LazyLoadingEnabled = false;
+
+────────────────────────────────────────────────────────────────────────────────
+Q28: What is the Repository and Unit of Work pattern with EF6?
+───────────────────────────────────────────────────────────────
+A: REPOSITORY — abstracts data access behind an interface:
+     public interface IProductRepository
+     {
+         Product GetById(int id);
+         IEnumerable<Product> GetAll();
+         void Add(Product product);
+         void Remove(Product product);
+     }
+
+     public class EfProductRepository : IProductRepository
+     {
+         private readonly AppDbContext _ctx;
+         public EfProductRepository(AppDbContext ctx) { _ctx = ctx; }
+         public Product GetById(int id) => _ctx.Products.Find(id);
+         public IEnumerable<Product> GetAll() => _ctx.Products.ToList();
+         public void Add(Product p) => _ctx.Products.Add(p);
+         public void Remove(Product p) => _ctx.Products.Remove(p);
+     }
+
+   UNIT OF WORK — wraps multiple repositories and commits changes together:
+     public interface IUnitOfWork : IDisposable
+     {
+         IProductRepository Products { get; }
+         IOrderRepository   Orders   { get; }
+         void Save();
+     }
+
+     public class UnitOfWork : IUnitOfWork
+     {
+         private readonly AppDbContext _ctx;
+         public IProductRepository Products { get; }
+         public IOrderRepository   Orders   { get; }
+         public UnitOfWork(AppDbContext ctx)
+         {
+             _ctx     = ctx;
+             Products = new EfProductRepository(ctx);
+             Orders   = new EfOrderRepository(ctx);
+         }
+         public void Save() => _ctx.SaveChanges();
+         public void Dispose() => _ctx.Dispose();
+     }
+
+   Used in controller:
+     public class OrderController : Controller
+     {
+         private readonly IUnitOfWork _uow;
+         public OrderController(IUnitOfWork uow) { _uow = uow; }
+
+         public ActionResult PlaceOrder(OrderViewModel vm)
+         {
+             var product = _uow.Products.GetById(vm.ProductId);
+             var order   = new Order { Product = product, Quantity = vm.Quantity };
+             _uow.Orders.Add(order);
+             _uow.Save();
+             return RedirectToAction("Confirmation", new { id = order.Id });
+         }
+     }
+
+================================================================================
+SECTION 10: BUNDLING AND MINIFICATION
+================================================================================
+
+Q29: What is Bundling and Minification in ASP.NET MVC?
+────────────────────────────────────────────────────────
+A: BUNDLING — combines multiple CSS/JS files into a single HTTP request, reducing
+              the number of requests the browser makes.
+
+   MINIFICATION — removes whitespace, comments, and shortens variable names in
+                  CSS/JS files to reduce payload size.
+
+   Configure in BundleConfig.cs (App_Start):
+     public class BundleConfig
+     {
+         public static void RegisterBundles(BundleCollection bundles)
+         {
+             // Script bundles
+             bundles.Add(new ScriptBundle("~/bundles/jquery")
+                 .Include("~/Scripts/jquery-{version}.js"));
+
+             bundles.Add(new ScriptBundle("~/bundles/jqueryval")
+                 .Include("~/Scripts/jquery.validate*"));
+
+             bundles.Add(new ScriptBundle("~/bundles/modernizr")
+                 .Include("~/Scripts/modernizr-*"));
+
+             bundles.Add(new ScriptBundle("~/bundles/bootstrap")
+                 .Include("~/Scripts/bootstrap.js"));
+
+             // Style bundles
+             bundles.Add(new StyleBundle("~/Content/css")
+                 .Include("~/Content/bootstrap.css", "~/Content/site.css"));
+         }
+     }
+
+   In view/layout:
+     @Styles.Render("~/Content/css")
+     @Scripts.Render("~/bundles/jquery")
+     @Scripts.Render("~/bundles/jqueryval")
+
+   Behavior:
+   • Development (debug=true in Web.config): individual files loaded, no minification.
+   • Production (debug=false):              bundled + minified + versioned URL.
+
+   Versioned URL (cache busting):
+     /Content/css?v=xxxxxx   — fingerprint changes when files change.
+
+================================================================================
+SECTION 11: STATE MANAGEMENT
+================================================================================
+
+Q30: What are the state management options in ASP.NET MVC?
+────────────────────────────────────────────────────────────
+A: HTTP is stateless. ASP.NET MVC provides several mechanisms:
+
+   1. COOKIES:
+      • Small key-value pairs stored in the browser.
+      • Sent with every request automatically.
+      Response.Cookies.Add(new HttpCookie("theme", "dark") {
+          Expires   = DateTime.Now.AddDays(30),
+          HttpOnly  = true,
+          Secure    = true
+      });
+      string theme = Request.Cookies["theme"]?.Value;
+
+   2. SESSION:
+      • Server-side key-value store (InProc, StateServer, SQLServer).
+      • Browser holds only a session ID cookie.
+      Session["CartId"] = Guid.NewGuid().ToString();
+      string cartId = Session["CartId"] as string;
+
+   3. TEMPDATA — cross-request data (one redirect). Backed by Session.
+
+   4. VIEWDATA / VIEWBAG — current request only (controller to view).
+
+   5. QUERY STRING — data in URL. Stateless, bookmarkable.
+
+   6. HIDDEN FIELDS — data embedded in HTML form.
+      @Html.HiddenFor(m => m.Id)
+
+   7. APPLICATION STATE — HttpApplicationState (app-wide, not web-farm safe):
+      Application["SiteVisits"] = (int)Application["SiteVisits"] + 1;
+
+   8. DATABASE — permanent, distributed persistence.
+
+   9. CACHE — HttpRuntime.Cache or MemoryCache for short-lived shared data.
+
+────────────────────────────────────────────────────────────────────────────────
+Q31: What are the Session storage modes in ASP.NET?
+─────────────────────────────────────────────────────
+A: ASP.NET supports several session storage providers (configured in Web.config):
+
+   InProc (default):
+   • Stored in the web server's memory (IIS worker process).
+   • Fastest — no serialization.
+   • Lost on app pool recycle; not suitable for web farms (each server has own memory).
+   <sessionState mode="InProc" timeout="20" />
+
+   StateServer:
+   • Stored in ASP.NET State Service (separate Windows service).
+   • Survives app pool recycles.
+   • Objects must be serializable.
+   • Suitable for web farms (all servers point to same state server).
+   <sessionState mode="StateServer" stateConnectionString="tcpip=127.0.0.1:42424" />
+
+   SQLServer:
+   • Stored in a SQL Server database.
+   • Most durable — survives server restarts.
+   • Objects must be serializable.
+   • Suitable for web farms and cloud deployments.
+   <sessionState mode="SQLServer"
+       sqlConnectionString="Data Source=.;Integrated Security=SSPI;" />
+
+   Custom:
+   • Implement SessionStateStoreProviderBase.
+   • Use for Redis, Memcached, etc.
+
+================================================================================
+SECTION 12: AREAS
+================================================================================
+
+Q32: What are Areas in ASP.NET MVC?
+──────────────────────────────────────
+A: Areas allow you to partition a large MVC application into functional sections,
+   each with its own Controllers, Views, and Models.
+
+   Common use: Admin area vs. public-facing area of a site.
+
+   Create area: Right-click project → Add → Area → "Admin"
+
+   Folder structure created:
+     Areas/
+       Admin/
+         Controllers/DashboardController.cs
+         Models/
+         Views/
+           Dashboard/Index.cshtml
+           Shared/_Layout.cshtml  (area-specific layout)
+         AdminAreaRegistration.cs  ← auto-generated route registration
+
+   AdminAreaRegistration.cs:
+     public class AdminAreaRegistration : AreaRegistration
+     {
+         public override string AreaName => "Admin";
+
+         public override void RegisterArea(AreaRegistrationContext context)
+         {
+             context.MapRoute(
+                 "Admin_default",
+                 "Admin/{controller}/{action}/{id}",
+                 new { controller = "Dashboard", action = "Index", id = UrlParameter.Optional }
+             );
+         }
+     }
+
+   Register all areas in Global.asax:
+     AreaRegistration.RegisterAllAreas();  // must be first in Application_Start
+
+   Controller in Admin area:
+     namespace MyApp.Areas.Admin.Controllers
+     {
+         public class DashboardController : Controller
+         {
+             public ActionResult Index() => View();
+         }
+     }
+
+   Generate links to area actions:
+     @Html.ActionLink("Admin Dashboard", "Index", "Dashboard", new { area = "Admin" }, null)
+
+================================================================================
+SECTION 13: SECURITY
+================================================================================
+
+Q33: What is CSRF and how does ASP.NET MVC prevent it?
+────────────────────────────────────────────────────────
+A: CSRF (Cross-Site Request Forgery) tricks an authenticated user's browser into
+   sending an unauthorized request to your application.
+
+   Example attack:
+   1. User is logged into mybank.com (has auth cookie).
+   2. User visits evil.com which has a hidden form:
+      <form action="https://mybank.com/Transfer" method="POST">
+          <input name="amount" value="1000">
+          <input name="toAccount" value="attacker">
+      </form>
+      <script>document.forms[0].submit();</script>
+   3. Browser sends the POST with the auth cookie → transfer succeeds!
+
+   ASP.NET MVC protection — Anti-Forgery Token:
+   1. Server generates a unique token per session.
+   2. Token is embedded as a hidden field AND stored in a cookie.
+   3. On POST, MVC validates that both match.
+   4. Cross-site requests can't read your cookie, so they can't include the right token.
+
+   View:
+     @using (Html.BeginForm("Transfer", "Bank"))
+     {
+         @Html.AntiForgeryToken()   ← inserts <input type="hidden" name="__RequestVerificationToken">
+         ...
+     }
+
+   Controller:
+     [HttpPost]
+     [ValidateAntiForgeryToken]     ← validates token on every POST
+     public ActionResult Transfer(TransferViewModel vm) { ... }
+
+   Apply globally:
+     // FilterConfig.cs
+     filters.Add(new ValidateAntiForgeryTokenAttribute());
+
+────────────────────────────────────────────────────────────────────────────────
+Q34: What is XSS and how does Razor prevent it?
+─────────────────────────────────────────────────
+A: XSS (Cross-Site Scripting) — attacker injects malicious JavaScript into pages
+   that other users view, stealing cookies, redirecting, or defacing the page.
+
+   Razor auto-encodes output:
+   • @Model.UserInput  →  HTML-encoded (< → &lt; > → &gt;)
+   • Even if UserInput = "<script>alert('xss')</script>", it is SAFE.
+
+   Raw (unencoded) — DANGEROUS with user input:
+   • @Html.Raw(Model.Content)   — only for trusted HTML (e.g., CMS content)
+
+   Additional protections:
+   • HttpOnly cookies — auth cookies inaccessible from JavaScript.
+   • Content Security Policy header — restrict which scripts can run.
+   • Use the AntiXss library for extra sanitization.
+   • [ValidateInput(true)] — default; MVC rejects HTML input in forms (throws
+     HttpRequestValidationException). Disable per-action with [ValidateInput(false)]
+     when you intentionally allow HTML (e.g., a rich-text editor).
+
+   AllowHtml attribute:
+     public class ArticleViewModel
+     {
+         [Required]
+         [AllowHtml]                // allow HTML for this specific field only
+         public string Content { get; set; }
+
+         public string Title { get; set; }   // still protected
+     }
+
+================================================================================
+SECTION 14: DEPENDENCY INJECTION
+================================================================================
+
+Q35: Does ASP.NET MVC 5 have built-in DI? How do you implement it?
+────────────────────────────────────────────────────────────────────
+A: ASP.NET MVC 5 does NOT have a built-in DI container (unlike ASP.NET Core).
+   It uses IDependencyResolver as an abstraction that you plug a third-party
+   container into.
+
+   Popular DI containers used with MVC 5:
+   • Unity (Microsoft)
+   • Autofac
+   • Ninject
+   • StructureMap
+   • Castle Windsor
+
+   Example with Unity:
+     // NuGet: Unity.Mvc5
+     public static class UnityConfig
+     {
+         public static void RegisterComponents()
+         {
+             var container = new UnityContainer();
+
+             container.RegisterType<IProductService,  ProductService>(new HierarchicalLifetimeManager());
+             container.RegisterType<IProductRepo,     EfProductRepo>(new HierarchicalLifetimeManager());
+             container.RegisterType<AppDbContext,     AppDbContext>(new HierarchicalLifetimeManager());
+
+             DependencyResolver.SetResolver(new UnityDependencyResolver(container));
+         }
+     }
+
+     // Global.asax
+     UnityConfig.RegisterComponents();
+
+   Controller now receives dependencies via constructor:
+     public class ProductsController : Controller
+     {
+         private readonly IProductService _svc;
+         public ProductsController(IProductService svc) { _svc = svc; }
+     }
+
+   HierarchicalLifetimeManager ≈ Scoped (per HTTP request).
+   ContainerControlledLifetimeManager = Singleton.
+   TransientLifetimeManager = Transient.
+
+================================================================================
+SECTION 15: PERFORMANCE
+================================================================================
+
+Q36: What is Output Caching in ASP.NET MVC?
+─────────────────────────────────────────────
+A: Output caching stores the rendered HTML response in memory and serves it for
+   subsequent requests without executing the action or re-rendering the view.
+
+   [OutputCache] attribute:
+     [OutputCache(Duration = 60, VaryByParam = "none")]
+     public ActionResult Index()
+     {
+         return View(_svc.GetAll());   // cached for 60 seconds
+     }
+
+     [OutputCache(Duration = 30, VaryByParam = "id")]
+     public ActionResult Details(int id)
+     {
+         return View(_svc.GetById(id)); // separate cache entry per id value
+     }
+
+   Parameters:
+   • Duration     — seconds to cache.
+   • VaryByParam  — "none" = single cache; "id" = one per id value; "*" = every query string.
+   • VaryByHeader — cache varies by HTTP header.
+   • Location     — OutputCacheLocation: Server, Client, Downstream, Any, None.
+   • NoStore      — set Cache-Control: no-store (sensitive pages).
+
+   Donut caching (cache everything except dynamic parts):
+   • Use [OutputCache] on the action but exclude specific sections.
+   • Or use Html.Action() for dynamic child actions (child actions have their own cache).
+
+   Disable caching for sensitive pages:
+     [OutputCache(NoStore = true, Duration = 0, VaryByParam = "*")]
+     public ActionResult Account() { ... }
+
+────────────────────────────────────────────────────────────────────────────────
+Q37: What is asynchronous action in ASP.NET MVC 4/5?
+──────────────────────────────────────────────────────
+A: Async actions release IIS worker threads during I/O operations, allowing
+   the server to handle more concurrent requests.
+
+   MVC 4+ supports async via Task<ActionResult>:
+
+   SYNCHRONOUS (blocks a thread):
+     public ActionResult Products()
+     {
+         var products = _svc.GetAllProducts();  // thread blocked during DB call
+         return View(products);
+     }
+
+   ASYNCHRONOUS (thread released during I/O):
+     public async Task<ActionResult> Products()
+     {
+         var products = await _svc.GetAllProductsAsync();  // thread released
+         return View(products);
+     }
+
+   Before MVC 4 (AsyncController — now obsolete):
+     public class ProductsController : AsyncController
+     {
+         public void ProductsAsync() { ... }
+         public ActionResult ProductsCompleted(List<Product> products) { ... }
+     }
+
+   Rules:
+   • Async helps only for I/O-bound operations (DB, HTTP, file I/O).
+   • No performance gain for CPU-bound work.
+   • Never use .Result or .Wait() — causes deadlocks in ASP.NET.
+   • Always use ConfigureAwait(false) in library code (not needed in controllers).
+
+================================================================================
+SECTION 16: TESTING
+================================================================================
+
+Q38: How do you unit test an ASP.NET MVC controller?
+──────────────────────────────────────────────────────
+A: Controllers should be thin and delegate to services, which are mocked in tests.
+
+   Using NUnit/MSTest + Moq:
+     [TestClass]
+     public class ProductsControllerTests
+     {
+         private Mock<IProductService> _mockSvc;
+         private ProductsController   _controller;
+
+         [TestInitialize]
+         public void Setup()
+         {
+             _mockSvc    = new Mock<IProductService>();
+             _controller = new ProductsController(_mockSvc.Object);
+         }
+
+         [TestMethod]
+         public void Index_ReturnsViewWithAllProducts()
+         {
+             // Arrange
+             var products = new List<Product>
+             {
+                 new Product { Id = 1, Name = "Widget" }
+             };
+             _mockSvc.Setup(s => s.GetAll()).Returns(products);
+
+             // Act
+             var result = _controller.Index() as ViewResult;
+
+             // Assert
+             Assert.IsNotNull(result);
+             var model = result.Model as List<Product>;
+             Assert.AreEqual(1, model.Count);
+         }
+
+         [TestMethod]
+         public void Details_InvalidId_ReturnsHttpNotFound()
+         {
+             _mockSvc.Setup(s => s.GetById(99)).Returns((Product)null);
+
+             var result = _controller.Details(99);
+
+             Assert.IsInstanceOfType(result, typeof(HttpNotFoundResult));
+         }
+
+         [TestMethod]
+         public void Create_InvalidModel_ReturnsViewWithSameModel()
+         {
+             _controller.ModelState.AddModelError("Name", "Required");
+             var vm = new ProductViewModel();
+
+             var result = _controller.Create(vm) as ViewResult;
+
+             Assert.IsNotNull(result);
+             Assert.AreEqual(vm, result.Model);
+         }
+     }
+
+================================================================================
+SECTION 17: ADVANCED TOPICS
+================================================================================
+
+Q39: What is OWIN and Katana in ASP.NET MVC 5?
+────────────────────────────────────────────────
+A: OWIN (Open Web Interface for .NET) is a specification that decouples web
+   applications from the web server (IIS), enabling self-hosting and middleware
+   pipeline composition.
+
+   Katana is Microsoft's implementation of OWIN for the .NET Framework.
+
+   Key concept: OWIN defines the app as a function:
+     Func<IDictionary<string, object>, Task>  (the "app delegate")
+
+   Startup class (OWIN-based configuration in MVC 5):
+     [assembly: OwinStartup(typeof(MyApp.Startup))]
+     public class Startup
+     {
+         public void Configuration(IAppBuilder app)
+         {
+             // Configure authentication middleware
+             app.UseCookieAuthentication(new CookieAuthenticationOptions {
+                 AuthenticationType = DefaultAuthenticationTypes.ApplicationCookie,
+                 LoginPath          = new PathString("/Account/Login")
+             });
+
+             app.UseExternalSignInCookie(DefaultAuthenticationTypes.ExternalCookie);
+
+             // ASP.NET Identity uses OWIN middleware
+         }
+     }
+
+   Why OWIN matters in MVC 5:
+   • ASP.NET Identity middleware runs on OWIN.
+   • OAuth/OpenID Connect middleware (Google, Facebook login) runs on OWIN.
+   • Enables self-hosting (not dependent on IIS).
+   • ASP.NET Core replaces OWIN with its own middleware pipeline.
+
+────────────────────────────────────────────────────────────────────────────────
+Q40: What is the difference between Html.Partial and Html.Action?
+──────────────────────────────────────────────────────────────────
+A: Html.Partial:
+   • Renders a Razor partial view template directly.
+   • Does NOT go through a controller action.
+   • Shares the parent's ViewData/Model.
+   • Faster — no extra controller overhead.
+   • Use when the partial just needs to render data already in the parent model.
+
+     @Html.Partial("_ProductCard", product)
+
+   Html.Action (Child Action):
+   • Calls a CONTROLLER ACTION that returns a PartialView.
+   • Completely independent — has its own model, ViewData, and can do DB calls.
+   • Marked with [ChildActionOnly] to prevent direct URL access.
+   • More flexible but heavier (goes through full MVC pipeline).
+   • Use when the partial needs its own data independently of the parent view.
+
+     // Controller:
+     [ChildActionOnly]
+     public ActionResult NavigationMenu()
+     {
+         var categories = _repo.GetAll();
+         return PartialView("_NavigationMenu", categories);
+     }
+     // View:
+     @Html.Action("NavigationMenu", "Categories")
+
+   RenderPartial and RenderAction:
+   • @{ Html.RenderPartial("_Card", model); }   — writes directly to response stream
+   • @{ Html.RenderAction("Menu", "Nav"); }      — same, for actions
+   • Marginally faster (no string allocation), but less composable.
+
+────────────────────────────────────────────────────────────────────────────────
+Q41: What is the difference between ASP.NET MVC and ASP.NET Web API?
+─────────────────────────────────────────────────────────────────────
+A: Classic ASP.NET (before Core) had TWO separate frameworks for web and API:
+
+   ASP.NET MVC (System.Web.Mvc):
+   • Returns HTML views for browsers.
+   • Controller inherits System.Web.Mvc.Controller.
+   • Routes defined in RouteConfig.cs.
+   • Content negotiation: limited.
+
+   ASP.NET Web API (System.Web.Http):
+   • Returns JSON/XML for programmatic clients (apps, JS).
+   • Controller inherits System.Web.Http.ApiController.
+   • Routes defined in WebApiConfig.cs (api/{controller}/{id}).
+   • Full content negotiation via Accept header.
+   • Can be self-hosted outside IIS (OWIN).
+
+   They can coexist in the same project — different base classes, different routes.
+
+   In ASP.NET Core:
+   • Both are UNIFIED into a single framework.
+   • One controller base (ControllerBase + Controller for views).
+   • One routing system.
+   • No more split between MVC and Web API.
+
+────────────────────────────────────────────────────────────────────────────────
+Q42: What are the differences between ASP.NET MVC 5 and ASP.NET Core MVC?
+──────────────────────────────────────────────────────────────────────────
+A:
+   ┌────────────────────────┬───────────────────────┬───────────────────────────────┐
+   │ Feature                │ ASP.NET MVC 5          │ ASP.NET Core MVC             │
+   ├────────────────────────┼───────────────────────┼───────────────────────────────┤
+   │ Platform               │ Windows only           │ Cross-platform (W/L/Mac)     │
+   │ .NET runtime           │ .NET Framework only    │ .NET Core / .NET 5+          │
+   │ Open source            │ Partially              │ Fully open source            │
+   │ Performance            │ Good                   │ Much faster (Kestrel)        │
+   │ Built-in DI            │ No (use Unity/Autofac) │ Yes (built-in IoC)           │
+   │ Configuration          │ Web.config (XML)       │ appsettings.json + env vars  │
+   │ Startup                │ Global.asax + Startup  │ Program.cs only              │
+   │ Middleware             │ HttpModules/Handlers    │ Middleware pipeline          │
+   │ Tag Helpers            │ No (HTML Helpers only)  │ Yes (+ HTML Helpers)        │
+   │ Razor Pages            │ No                     │ Yes                          │
+   │ Web API                │ Separate framework      │ Unified (same controller)   │
+   │ gRPC / SignalR         │ SignalR only            │ Both                        │
+   │ Docker / Cloud         │ Limited                │ First-class support          │
+   │ Side-by-side deploy    │ No                     │ Yes (per-app .NET version)   │
+   │ HttpContext            │ System.Web.HttpContext  │ Microsoft.AspNetCore.*       │
+   └────────────────────────┴───────────────────────┴───────────────────────────────┘
+
+────────────────────────────────────────────────────────────────────────────────
+Q43: What is Global.asax and what events does it handle?
+─────────────────────────────────────────────────────────
+A: Global.asax is the application-level event handler file for an ASP.NET
+   application. It handles key application lifecycle events.
+
+   Common events:
+   Application_Start       — fires ONCE when the application starts (register routes,
+                             filters, bundles, areas, DI containers).
+   Application_End         — fires when the application shuts down.
+   Application_Error       — unhandled exception anywhere in the app.
+   Application_BeginRequest— fires at the START of every HTTP request.
+   Application_EndRequest  — fires at the END of every HTTP request.
+   Application_AuthenticateRequest — fires after user is authenticated.
+   Application_AuthorizeRequest    — fires after authorization check.
+   Session_Start           — new session created.
+   Session_End             — session expires or abandoned.
+
+   Application_Start example:
+     protected void Application_Start()
+     {
+         AreaRegistration.RegisterAllAreas();
+         FilterConfig.RegisterGlobalFilters(GlobalFilters.Filters);
+         RouteConfig.RegisterRoutes(RouteTable.Routes);
+         BundleConfig.RegisterBundles(BundleTable.Bundles);
+         UnityConfig.RegisterComponents();
+     }
+
+   Application_Error (global error handling):
+     protected void Application_Error()
+     {
+         var ex      = Server.GetLastError();
+         var httpEx  = ex as HttpException;
+         int code    = httpEx?.GetHttpCode() ?? 500;
+
+         _logger.Error(ex, "Unhandled exception");
+
+         if (code == 404)
+             Response.Redirect("~/Error/NotFound");
+         else
+             Response.Redirect("~/Error/General");
+
+         Server.ClearError();
+     }
+
+================================================================================
+QUICK-REFERENCE CHEAT SHEET
+================================================================================
+
+REQUEST PIPELINE ORDER:
+  IIS → UrlRoutingModule → MvcHandler → ControllerFactory → Controller
+  → Authorization Filter → Model Binding → Action Filters (Before)
+  → Action Method → Action Filters (After) → Result Filters (Before)
+  → Result Execution → Result Filters (After) → Response
+
+FILTER EXECUTION ORDER:
+  Global → Controller → Action  (OnExecuting — top down)
+  Action → Controller → Global  (OnExecuted  — bottom up)
+
+FILTER TYPES:
+  IAuthorizationFilter — runs first (OnAuthorization)
+  IActionFilter        — before/after action (OnActionExecuting/Executed)
+  IResultFilter        — before/after result (OnResultExecuting/Executed)
+  IExceptionFilter     — on unhandled exception (OnException)
+
+ACTIONRESULT QUICK MAP:
+  return View(model)                       → 200 HTML (ViewResult)
+  return PartialView("_Name", model)       → partial HTML
+  return Json(obj, JsonRequestBehavior.AllowGet) → JSON
+  return RedirectToAction("Index")         → 302 redirect
+  return HttpNotFound()                    → 404
+  return new HttpStatusCodeResult(403)     → 403
+  return File(bytes, "application/pdf")    → file download
+  return Content("text")                   → plain text
+
+PRG PATTERN:
+  [HttpPost] → process → RedirectToAction("Index")
+  Prevents duplicate form submission on F5 refresh.
+
+ANTI-FORGERY PATTERN:
+  View:       @Html.AntiForgeryToken()
+  Controller: [ValidateAntiForgeryToken] on every [HttpPost]
+
+MODEL VALIDATION:
+  1. Decorate ViewModel with Data Annotations.
+  2. Check if (!ModelState.IsValid) return View(vm);
+  3. View: @Html.ValidationSummary() + @Html.ValidationMessageFor()
+  4. Include ~/bundles/jqueryval for client-side validation.
+
+DI IN MVC 5:
+  IDependencyResolver ← set via DependencyResolver.SetResolver(...)
+  Popular containers: Unity, Autofac, Ninject
+  Controller = new SomeController(resolvedDependency)
+
+EF6 LOADING STRATEGIES:
+  Eager:    .Include(x => x.Related)     → one JOIN query
+  Lazy:     virtual navigation property  → auto-queries on access (N+1 risk)
+  Explicit: db.Entry(x).Reference().Load() → manual on-demand load
+
+STATE MANAGEMENT COMPARISON:
+  ViewData/ViewBag → current request only, controller to view
+  TempData         → current + next request (one redirect), backed by Session
+  Session          → per-user, server-side, persists until timeout
+  Cookie           → per-user, browser-stored, sent every request
+  Cache            → shared across users, time-limited
+
+CONVENTION-BASED ROUTING:
+  {controller}/{action}/{id?}
+  /Products/Details/5 → ProductsController.Details(5)
+
+GLOBAL.ASAX APPLICATION_START ORDER:
+  AreaRegistration.RegisterAllAreas()
+  FilterConfig.RegisterGlobalFilters()
+  RouteConfig.RegisterRoutes()
+  BundleConfig.RegisterBundles()
+  UnityConfig.RegisterComponents()  (or other DI setup)
+
+MVC 5 VS ASP.NET CORE MVC KEY POINTS:
+  MVC 5:  Windows only, .NET Framework, XML config, no built-in DI, System.Web
+  Core:   Cross-platform, .NET 5+, JSON config, built-in DI, no System.Web
+
+================================================================================
+END OF FILE — ASP.NET MVC (.NET FRAMEWORK) INTERVIEW QUESTIONS
+================================================================================
