@@ -1,0 +1,1711 @@
+================================================================================
+         .NET CORE WEB API — INTERVIEW QUESTIONS (BASIC TO ADVANCED)
+         (With examples and answers)
+================================================================================
+
+HOW TO USE THIS FILE:
+  - Read each Q, think of your own answer first, then check the A.
+  - Sections flow from fundamentals to advanced production topics.
+  - Sections: REST & HTTP Basics → Web API Fundamentals → Routing →
+              Controllers & Actions → Model Binding → Serialization →
+              Validation → Dependency Injection → Middleware →
+              Authentication & Authorization → Versioning →
+              Error Handling → Filters → HttpClient & External APIs →
+              Minimal APIs → Performance → Testing → Advanced Topics
+
+================================================================================
+SECTION 1: REST AND HTTP BASICS
+================================================================================
+
+Q1: What is REST? What are its core constraints?
+─────────────────────────────────────────────────
+A: REST (Representational State Transfer) is an architectural style for distributed
+   hypermedia systems. It is not a protocol — it is a set of constraints.
+
+   6 Constraints:
+   1. Client-Server       — client and server are separate; client handles UI,
+                            server handles data. Improved portability & scalability.
+   2. Stateless           — each request from the client must contain ALL information
+                            needed to understand it. Server stores NO client session.
+   3. Cacheable           — responses must declare themselves cacheable or not.
+                            Clients (and intermediaries) can cache responses.
+   4. Uniform Interface   — the most important constraint:
+                            a) Resource identification in requests (URI)
+                            b) Resource manipulation through representations
+                            c) Self-descriptive messages (Content-Type header)
+                            d) HATEOAS — Hypermedia As The Engine Of Application State
+   5. Layered System      — client cannot tell if it is talking directly to the server
+                            or an intermediary (proxy, gateway, load balancer).
+   6. Code on Demand      — (optional) server can send executable code to client
+                            (e.g., JavaScript).
+
+   An API that follows these constraints is called "RESTful."
+
+────────────────────────────────────────────────────────────────────────────────
+Q2: What are the HTTP methods and when should each be used?
+────────────────────────────────────────────────────────────
+A: HTTP defines a set of request methods (verbs):
+
+   GET     — Retrieve a resource. SAFE + IDEMPOTENT. No body.
+             GET /products          → list all products
+             GET /products/5        → get product 5
+
+   POST    — Create a new resource or trigger an action. NEITHER safe nor idempotent.
+             POST /products         → create a new product (body = new product data)
+             POST /orders/checkout  → trigger checkout action
+
+   PUT     — Replace an entire resource. IDEMPOTENT. Body = full resource.
+             PUT /products/5        → replace product 5 completely
+
+   PATCH   — Partially update a resource. Body = only changed fields.
+             PATCH /products/5      → update only the price field
+
+   DELETE  — Remove a resource. IDEMPOTENT.
+             DELETE /products/5     → delete product 5
+
+   HEAD    — Like GET but response body is empty. Used to check existence/metadata.
+   OPTIONS — Returns allowed methods for a URL. Used by CORS preflight.
+   TRACE   — Echoes request back for debugging.
+
+   SAFE       — does not modify server state (GET, HEAD, OPTIONS).
+   IDEMPOTENT — same result no matter how many times you call it (GET, PUT, DELETE).
+
+────────────────────────────────────────────────────────────────────────────────
+Q3: What are the common HTTP status codes and what do they mean?
+────────────────────────────────────────────────────────────────
+A: 1xx — Informational
+   100 Continue      — server received request headers, client should send body.
+
+   2xx — Success
+   200 OK            — standard success.
+   201 Created       — resource created (include Location header to new resource).
+   202 Accepted      — request accepted for async processing.
+   204 No Content    — success but no body (DELETE, PUT with no return).
+
+   3xx — Redirection
+   301 Moved Permanently — resource permanently moved to new URL.
+   302 Found             — temporary redirect.
+   304 Not Modified      — client cache is still valid (ETag / If-None-Match).
+
+   4xx — Client Errors
+   400 Bad Request       — malformed request, validation failure.
+   401 Unauthorized      — missing or invalid authentication credentials.
+   403 Forbidden         — authenticated but not authorized.
+   404 Not Found         — resource does not exist.
+   405 Method Not Allowed— HTTP method not supported on this resource.
+   409 Conflict          — resource conflict (duplicate, concurrency issue).
+   415 Unsupported Media Type — wrong Content-Type.
+   422 Unprocessable Entity   — well-formed body but semantic errors (validation).
+   429 Too Many Requests      — rate limit exceeded.
+
+   5xx — Server Errors
+   500 Internal Server Error  — unhandled exception.
+   502 Bad Gateway            — upstream server returned bad response.
+   503 Service Unavailable    — server overloaded or down for maintenance.
+   504 Gateway Timeout        — upstream server did not respond in time.
+
+────────────────────────────────────────────────────────────────────────────────
+Q4: What is the difference between PUT and PATCH?
+──────────────────────────────────────────────────
+A: PUT — FULL replacement. Client sends the ENTIRE resource.
+         Fields not included in the body are overwritten/cleared.
+         PUT /products/5 with body { "name": "Widget", "price": 9.99 }
+         → product 5 becomes exactly this object.
+
+   PATCH — PARTIAL update. Client sends ONLY the changed fields.
+           Fields not included are LEFT UNCHANGED.
+           PATCH /products/5 with body { "price": 12.99 }
+           → only price changes, name stays the same.
+
+   PUT must be idempotent: calling it multiple times produces the same state.
+   PATCH is typically idempotent but does not have to be (spec does not require it).
+
+   Common PATCH formats:
+   • JSON Merge Patch (RFC 7396): simple JSON with only changed fields.
+   • JSON Patch (RFC 6902): array of operations [{"op":"replace","path":"/price","value":12.99}].
+
+================================================================================
+SECTION 2: WEB API FUNDAMENTALS
+================================================================================
+
+Q5: What is ASP.NET Core Web API?
+────────────────────────────────────
+A: ASP.NET Core Web API is a framework for building HTTP-based services (RESTful APIs)
+   that return data (JSON, XML) instead of HTML views. It is built on the same
+   ASP.NET Core pipeline as MVC — same routing, DI, middleware, filters.
+
+   Key characteristics:
+   • Controllers inherit ControllerBase (not Controller — no View support needed).
+   • [ApiController] attribute enables API-specific behaviors.
+   • Returns data serialized to JSON/XML via content negotiation.
+   • Stateless — no sessions by default.
+   • Works with any HTTP client: browser JS, mobile apps, other services.
+
+   Minimal Program.cs:
+     var builder = WebApplication.CreateBuilder(args);
+     builder.Services.AddControllers();
+
+     var app = builder.Build();
+     app.MapControllers();
+     app.Run();
+
+   Controller:
+     [ApiController]
+     [Route("api/[controller]")]
+     public class ProductsController : ControllerBase
+     {
+         [HttpGet]
+         public IActionResult GetAll() => Ok(new[] { "Widget", "Gadget" });
+     }
+
+────────────────────────────────────────────────────────────────────────────────
+Q6: What does the [ApiController] attribute do?
+────────────────────────────────────────────────
+A: [ApiController] enables several API-specific conventions that reduce boilerplate:
+
+   1. AUTOMATIC MODEL VALIDATION:
+      If ModelState.IsValid is false, automatically returns 400 Bad Request with
+      ValidationProblemDetails. You do NOT need to write:
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+   2. BINDING SOURCE INFERENCE:
+      • Complex types (classes) → [FromBody] automatically.
+      • Simple types (int, string) in route template → [FromRoute] automatically.
+      • Simple types NOT in route → [FromQuery] automatically.
+      • IFormFile → [FromForm] automatically.
+      Removes need for explicit [FromBody], [FromRoute], [FromQuery] in most cases.
+
+   3. PROBLEM DETAILS (RFC 7807):
+      Error responses use a consistent ProblemDetails JSON format:
+      { "type": "...", "title": "...", "status": 400, "detail": "...", "errors": {...} }
+
+   4. ATTRIBUTE ROUTING REQUIRED:
+      Conventional routing is not supported; you must use [Route] attributes.
+
+   5. MULTIPART/FORM-DATA INFERENCE:
+      Actions with IFormFile parameters infer [FromForm].
+
+────────────────────────────────────────────────────────────────────────────────
+Q7: What is the difference between ControllerBase and Controller?
+─────────────────────────────────────────────────────────────────
+A: ControllerBase:
+   • Provides HTTP helper methods: Ok(), BadRequest(), NotFound(), Created(),
+     NoContent(), StatusCode(), File(), etc.
+   • Does NOT include view-related features.
+   • Use for Web API (returns data, not HTML).
+
+   Controller (inherits ControllerBase):
+   • Adds View(), PartialView(), Json(), ViewBag, ViewData, TempData.
+   • Use when the controller returns Razor views (HTML).
+
+   For a pure Web API, always use ControllerBase — it avoids loading
+   view-engine assemblies unnecessarily.
+
+================================================================================
+SECTION 3: ROUTING
+================================================================================
+
+Q8: How does attribute routing work in Web API?
+─────────────────────────────────────────────────
+A: Every Web API controller and action must use attribute routing (required when
+   [ApiController] is applied).
+
+   Controller-level route template:
+     [Route("api/[controller]")]          // [controller] = class name minus "Controller"
+     [Route("api/products")]              // explicit
+
+   Action-level HTTP method + sub-route:
+     [HttpGet]                            // GET /api/products
+     [HttpGet("{id:int}")]                // GET /api/products/5
+     [HttpGet("{id:int}/details")]        // GET /api/products/5/details
+     [HttpPost]                           // POST /api/products
+     [HttpPut("{id:int}")]                // PUT /api/products/5
+     [HttpPatch("{id:int}")]              // PATCH /api/products/5
+     [HttpDelete("{id:int}")]             // DELETE /api/products/5
+
+   Combine controller + action routes:
+     [Route("api/[controller]")]
+     public class ProductsController : ControllerBase
+     {
+         [HttpGet("{id:int}")]            // ← combined: GET /api/products/5
+         public IActionResult Get(int id) { ... }
+     }
+
+   [Route] on action OVERRIDES controller prefix if it starts with /:
+     [HttpGet("/health")]                 // GET /health  (ignores controller prefix)
+
+────────────────────────────────────────────────────────────────────────────────
+Q9: How do you handle route conflicts and route ordering?
+──────────────────────────────────────────────────────────
+A: When two routes could match the same URL, ASP.NET Core picks the most specific
+   one. If ambiguity remains, it throws AmbiguousMatchException at startup.
+
+   Resolution strategies:
+   1. Add route constraints to differentiate: {id:int} vs {slug:alpha}.
+   2. Use explicit route names: [HttpGet("by-id/{id:int}")] vs [HttpGet("by-slug/{slug}")]
+   3. Apply [HttpGet("{id:int}")] before a catch-all (framework handles specificity).
+
+   Example:
+     [HttpGet("{id:int}")]         // /products/5      → int route
+     [HttpGet("{name:alpha}")]     // /products/widget → alpha route
+     // No conflict — different constraints.
+
+   Route names (for link generation):
+     [HttpGet("{id:int}", Name = "GetProduct")]
+     // Generate: Url.Link("GetProduct", new { id = 5 })
+     //        or: CreatedAtRoute("GetProduct", new { id }, product)
+
+────────────────────────────────────────────────────────────────────────────────
+Q10: What is the [FromRoute], [FromQuery], [FromBody], [FromHeader] binding?
+─────────────────────────────────────────────────────────────────────────────
+A: These attributes explicitly specify WHERE to read a parameter value from.
+
+   [FromRoute]  — from route segment: GET /products/{id}
+   [FromQuery]  — from query string:  GET /products?sort=asc&page=1
+   [FromBody]   — from request body (JSON/XML): POST /products with JSON payload
+   [FromHeader] — from HTTP header:   X-Api-Key: abc123
+   [FromForm]   — from form-encoded body (multipart/form-data or
+                  application/x-www-form-urlencoded)
+   [FromServices] — resolved from the DI container (not request data)
+
+   Example:
+     [HttpGet("{id:int}")]
+     public IActionResult Get(
+         [FromRoute]  int    id,
+         [FromQuery]  string? include,
+         [FromHeader(Name = "X-Api-Version")] string? apiVersion)
+     { ... }
+
+     [HttpPost]
+     public IActionResult Create([FromBody] CreateProductRequest request) { ... }
+
+   With [ApiController], binding source inference handles most cases automatically.
+
+================================================================================
+SECTION 4: CONTROLLERS AND ACTIONS
+================================================================================
+
+Q11: What are the common IActionResult return types in Web API?
+───────────────────────────────────────────────────────────────
+A: Web API actions typically return:
+
+   Success:
+   • Ok(value)              → 200 with body
+   • Created(uri, value)    → 201 with Location header
+   • CreatedAtAction(action, routeValues, value) → 201 with Location to action
+   • CreatedAtRoute(routeName, routeValues, value)
+   • Accepted()             → 202 (async processing)
+   • NoContent()            → 204 (no body — typical for DELETE/PUT)
+
+   Client errors:
+   • BadRequest()           → 400
+   • BadRequest(ModelState) → 400 with validation errors
+   • Unauthorized()         → 401
+   • Forbid()               → 403
+   • NotFound()             → 404
+   • Conflict()             → 409
+   • UnprocessableEntity()  → 422
+   • StatusCode(429)        → custom code
+
+   Full example (RESTful CRUD):
+     [HttpGet("{id:int}")]
+     public async Task<ActionResult<ProductDto>> Get(int id)
+     {
+         var p = await _svc.GetByIdAsync(id);
+         return p is null ? NotFound() : Ok(p);
+     }
+
+     [HttpPost]
+     public async Task<ActionResult<ProductDto>> Create(CreateProductRequest req)
+     {
+         var p = await _svc.CreateAsync(req);
+         return CreatedAtAction(nameof(Get), new { id = p.Id }, p);
+     }
+
+     [HttpDelete("{id:int}")]
+     public async Task<IActionResult> Delete(int id)
+     {
+         var found = await _svc.DeleteAsync(id);
+         return found ? NoContent() : NotFound();
+     }
+
+────────────────────────────────────────────────────────────────────────────────
+Q12: What is ActionResult<T> and why is it preferred?
+──────────────────────────────────────────────────────
+A: ActionResult<T> is a generic return type that can hold EITHER:
+   • A specific T value (implicitly converted to OkObjectResult)
+   • Any IActionResult (NotFound, BadRequest, etc.)
+
+   Benefits:
+   1. Type information is available for OpenAPI/Swagger documentation — Swagger
+      knows the success response schema without extra attributes.
+   2. More expressive code — compiler knows the T.
+   3. Implicit conversions reduce boilerplate.
+
+   Comparison:
+     // IActionResult — Swagger has no idea what 200 returns
+     public IActionResult Get(int id)
+     {
+         var p = _repo.GetById(id);
+         return p is null ? NotFound() : Ok(p);   // Ok(p) — type lost
+     }
+
+     // ActionResult<T> — Swagger knows 200 = ProductDto
+     public ActionResult<ProductDto> Get(int id)
+     {
+         var p = _repo.GetById(id);
+         return p is null ? NotFound() : p;        // implicit Ok wrapping
+     }
+
+================================================================================
+SECTION 5: SERIALIZATION
+================================================================================
+
+Q13: How does JSON serialization work in ASP.NET Core Web API?
+───────────────────────────────────────────────────────────────
+A: ASP.NET Core uses System.Text.Json (STJ) by default since .NET 3.0.
+   Newtonsoft.Json (Json.NET) was the default before that and is still widely used.
+
+   System.Text.Json:
+   • Built into .NET — no extra NuGet package.
+   • Faster and lower memory than Newtonsoft.
+   • Strict by default: case-sensitive, no reference loops, no comments.
+
+   Configure globally in Program.cs:
+     builder.Services.AddControllers()
+         .AddJsonOptions(opts => {
+             opts.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+             opts.JsonSerializerOptions.WriteIndented        = true;
+             opts.JsonSerializerOptions.DefaultIgnoreCondition =
+                 JsonIgnoreCondition.WhenWritingNull;
+             opts.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+         });
+
+   Switch to Newtonsoft.Json:
+     // NuGet: Microsoft.AspNetCore.Mvc.NewtonsoftJson
+     builder.Services.AddControllers()
+         .AddNewtonsoftJson(opts => {
+             opts.SerializerSettings.ContractResolver =
+                 new CamelCasePropertyNamesContractResolver();
+             opts.SerializerSettings.ReferenceLoopHandling =
+                 ReferenceLoopHandling.Ignore;
+             opts.SerializerSettings.NullValueHandling = NullValueHandling.Ignore;
+         });
+
+   When to use Newtonsoft.Json:
+   • Need JsonPatch support ([FromBody] JsonPatchDocument<T>).
+   • Need reference loop handling (serializing entity graphs).
+   • Legacy code base that relies on [JsonProperty] attributes.
+
+────────────────────────────────────────────────────────────────────────────────
+Q14: What are DTOs (Data Transfer Objects) and why should you use them?
+───────────────────────────────────────────────────────────────────────
+A: A DTO is a plain class used to transfer data between layers — specifically
+   between the API and its clients. It is NOT the same as the domain entity.
+
+   Why NOT expose entities directly:
+   • Over-posting (mass assignment) — attacker sends fields like IsAdmin, Password.
+   • Over-fetching — returns sensitive/internal fields (PasswordHash, etc.).
+   • Tight coupling — changes to DB schema break the API contract.
+   • Circular references — EF navigation properties cause serialization loops.
+   • Poor documentation — Swagger shows irrelevant EF fields.
+
+   Example:
+     // Domain entity (internal)
+     public class Product
+     {
+         public int    Id            { get; set; }
+         public string Name          { get; set; }
+         public string InternalCode  { get; set; }  // should not be exposed
+         public bool   IsDeleted     { get; set; }  // soft-delete, internal
+     }
+
+     // Response DTO (external contract)
+     public record ProductDto(int Id, string Name);
+
+     // Request DTO (create)
+     public record CreateProductRequest(
+         [Required][StringLength(100)] string Name,
+         [Range(0.01, 9999.99)]        decimal Price);
+
+   Mapping: use AutoMapper, Mapster, or manual mapping.
+
+================================================================================
+SECTION 6: VALIDATION
+================================================================================
+
+Q15: How does model validation work in Web API?
+─────────────────────────────────────────────────
+A: Model validation in Web API works exactly like MVC:
+
+   1. Model Binder deserializes the request body into the DTO.
+   2. Validation attributes on the DTO properties are evaluated.
+   3. Errors are stored in ModelState.
+   4. With [ApiController], if ModelState.IsValid == false, a 400 response is
+      automatically returned with a ValidationProblemDetails body — no manual check.
+
+   Data Annotations:
+     public record CreateProductRequest(
+         [Required]
+         [StringLength(100, MinimumLength = 2)]
+         string Name,
+
+         [Required]
+         [Range(0.01, 9999.99)]
+         decimal Price,
+
+         [Required]
+         [EnumDataType(typeof(Category))]
+         Category Category);
+
+   Customize the automatic 400 response:
+     builder.Services.AddControllers()
+         .ConfigureApiBehaviorOptions(opts => {
+             opts.InvalidModelStateResponseFactory = context => {
+                 var problems = new ValidationProblemDetails(context.ModelState) {
+                     Status = StatusCodes.Status422UnprocessableEntity
+                 };
+                 return new UnprocessableEntityObjectResult(problems);
+             };
+         });
+
+────────────────────────────────────────────────────────────────────────────────
+Q16: What is FluentValidation and how does it integrate with Web API?
+──────────────────────────────────────────────────────────────────────
+A: FluentValidation is a popular library for building complex validation rules in
+   separate validator classes — keeping models clean and validation testable.
+
+   NuGet: FluentValidation.AspNetCore
+
+   Define validator:
+     public class CreateProductRequestValidator
+         : AbstractValidator<CreateProductRequest>
+     {
+         public CreateProductRequestValidator(IProductRepository repo)
+         {
+             RuleFor(x => x.Name)
+                 .NotEmpty()
+                 .MaximumLength(100)
+                 .MustAsync(async (name, ct) => !await repo.ExistsAsync(name))
+                 .WithMessage("Product name already exists.");
+
+             RuleFor(x => x.Price)
+                 .GreaterThan(0)
+                 .LessThan(10000);
+
+             RuleFor(x => x.Category)
+                 .IsInEnum();
+         }
+     }
+
+   Register (integrates with ModelState — same auto-400 behavior):
+     builder.Services.AddFluentValidationAutoValidation();
+     builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+
+   Advantages over Data Annotations:
+   • Supports DI (inject repositories for async DB checks).
+   • Complex cross-field rules.
+   • Rules separated from model (single responsibility).
+   • Highly testable.
+
+================================================================================
+SECTION 7: DEPENDENCY INJECTION
+================================================================================
+
+Q17: How do you register and use services in a Web API?
+────────────────────────────────────────────────────────
+A: ASP.NET Core's built-in DI container is used. Register in Program.cs, inject
+   via constructor.
+
+   Lifetimes:
+   • AddTransient  — new instance per injection (stateless services).
+   • AddScoped     — one instance per HTTP request (DbContext, unit of work).
+   • AddSingleton  — one instance for app lifetime (thread-safe caches, clients).
+
+   Example:
+     // Program.cs
+     builder.Services.AddScoped<IProductRepository, EfProductRepository>();
+     builder.Services.AddScoped<IProductService, ProductService>();
+     builder.Services.AddSingleton<ICacheService, RedisCacheService>();
+     builder.Services.AddHttpClient<IGitHubClient, GitHubClient>(client => {
+         client.BaseAddress = new Uri("https://api.github.com/");
+     });
+
+     // Controller
+     [ApiController]
+     [Route("api/[controller]")]
+     public class ProductsController : ControllerBase
+     {
+         private readonly IProductService _svc;
+         public ProductsController(IProductService svc) => _svc = svc;
+
+         [HttpGet]
+         public async Task<ActionResult<IEnumerable<ProductDto>>> GetAll()
+             => Ok(await _svc.GetAllAsync());
+     }
+
+   Do NOT use service locator pattern (HttpContext.RequestServices.GetService<T>())
+   — it hides dependencies and makes testing hard. Prefer constructor injection.
+
+================================================================================
+SECTION 8: MIDDLEWARE IN WEB API
+================================================================================
+
+Q18: What middleware is typically used in a Web API?
+─────────────────────────────────────────────────────
+A: Typical middleware pipeline for a Web API (order matters):
+
+     app.UseExceptionHandler("/error");  // or custom global handler
+     app.UseHttpsRedirection();
+     app.UseCors("MyPolicy");
+     app.UseRouting();
+     app.UseAuthentication();
+     app.UseAuthorization();
+     app.UseOutputCache();               // optional
+     app.UseRateLimiter();               // optional
+     app.MapControllers();
+
+   Note: Static files middleware is usually NOT needed in a pure API.
+
+   Custom request/response logging middleware:
+     public class RequestLoggingMiddleware
+     {
+         private readonly RequestDelegate _next;
+         private readonly ILogger<RequestLoggingMiddleware> _log;
+
+         public RequestLoggingMiddleware(RequestDelegate next,
+             ILogger<RequestLoggingMiddleware> log)
+         { _next = next; _log = log; }
+
+         public async Task InvokeAsync(HttpContext ctx)
+         {
+             _log.LogInformation("{Method} {Path}", ctx.Request.Method, ctx.Request.Path);
+             var sw = Stopwatch.StartNew();
+             await _next(ctx);
+             sw.Stop();
+             _log.LogInformation("Response {Status} in {Ms}ms",
+                 ctx.Response.StatusCode, sw.ElapsedMilliseconds);
+         }
+     }
+     app.UseMiddleware<RequestLoggingMiddleware>();
+
+================================================================================
+SECTION 9: AUTHENTICATION AND AUTHORIZATION IN WEB API
+================================================================================
+
+Q19: How do you secure a Web API with JWT Bearer Authentication?
+─────────────────────────────────────────────────────────────────
+A: JWT (JSON Web Token) is the standard for stateless Web API authentication.
+
+   STEP 1 — Install NuGet:
+     Microsoft.AspNetCore.Authentication.JwtBearer
+
+   STEP 2 — Configure in Program.cs:
+     builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+         .AddJwtBearer(opts =>
+         {
+             opts.TokenValidationParameters = new TokenValidationParameters
+             {
+                 ValidateIssuer           = true,
+                 ValidIssuer              = builder.Configuration["Jwt:Issuer"],
+                 ValidateAudience         = true,
+                 ValidAudience            = builder.Configuration["Jwt:Audience"],
+                 ValidateLifetime         = true,
+                 ClockSkew                = TimeSpan.Zero,  // no leeway on expiry
+                 ValidateIssuerSigningKey = true,
+                 IssuerSigningKey = new SymmetricSecurityKey(
+                     Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
+             };
+         });
+     builder.Services.AddAuthorization();
+
+     app.UseAuthentication();
+     app.UseAuthorization();
+
+   STEP 3 — Generate token (login endpoint):
+     private string GenerateToken(User user)
+     {
+         var key     = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));
+         var creds   = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+         var claims  = new[]
+         {
+             new Claim(JwtRegisteredClaimNames.Sub,   user.Id.ToString()),
+             new Claim(JwtRegisteredClaimNames.Email, user.Email),
+             new Claim(ClaimTypes.Role,               user.Role),
+             new Claim(JwtRegisteredClaimNames.Jti,   Guid.NewGuid().ToString())
+         };
+         var token = new JwtSecurityToken(
+             issuer:             _config["Jwt:Issuer"],
+             audience:           _config["Jwt:Audience"],
+             claims:             claims,
+             expires:            DateTime.UtcNow.AddHours(1),
+             signingCredentials: creds);
+         return new JwtSecurityTokenHandler().WriteToken(token);
+     }
+
+   STEP 4 — Protect endpoints:
+     [Authorize]                          // must be authenticated
+     [Authorize(Roles = "Admin")]         // must be in Admin role
+     [Authorize(Policy = "CanEditOrder")] // policy-based
+
+   Client sends: Authorization: Bearer <token>
+
+────────────────────────────────────────────────────────────────────────────────
+Q20: What is a Refresh Token and why is it needed?
+───────────────────────────────────────────────────
+A: Access tokens (JWT) are short-lived (15 min to 1 hour) to limit damage if
+   stolen. But users should not need to log in again every hour.
+
+   Refresh Token flow:
+   1. On login, server issues: access_token (short-lived) + refresh_token (long-lived).
+   2. Client stores refresh_token in an HttpOnly cookie (or secure storage).
+   3. Client uses access_token for API requests.
+   4. When access_token expires (401), client sends refresh_token to
+      POST /auth/refresh.
+   5. Server validates refresh_token against DB, issues new access_token
+      (and optionally a new refresh_token — rotation).
+   6. Old refresh_token is invalidated in DB.
+
+   Refresh token properties:
+   • Opaque random string (not a JWT) — stored in DB alongside user.
+   • Has an expiry (hours, days, or weeks).
+   • Revocable — server can invalidate it (logout, security event).
+
+   Why this matters:
+   • JWT is stateless — you cannot revoke it once issued.
+   • Keeping access tokens short-lived minimizes the window of a stolen token.
+   • Refresh tokens can be revoked immediately.
+
+────────────────────────────────────────────────────────────────────────────────
+Q21: What is the difference between [Authorize] and [AllowAnonymous]?
+──────────────────────────────────────────────────────────────────────
+A: [Authorize]      — requires the user to be authenticated (and optionally
+                      authorized). Can be placed on controller or action.
+                      If on controller, all actions require auth.
+
+   [AllowAnonymous]  — overrides [Authorize] on any action it decorates.
+                       Use it on specific public actions inside a protected controller.
+
+   Example:
+     [Authorize]                                  // all actions require auth
+     [ApiController]
+     [Route("api/[controller]")]
+     public class ProductsController : ControllerBase
+     {
+         [AllowAnonymous]                         // override — public
+         [HttpGet]
+         public IActionResult GetAll() { ... }
+
+         [HttpPost]                               // still requires auth
+         public IActionResult Create(...) { ... }
+
+         [Authorize(Roles = "Admin")]             // requires auth + Admin role
+         [HttpDelete("{id:int}")]
+         public IActionResult Delete(int id) { ... }
+     }
+
+================================================================================
+SECTION 10: API VERSIONING
+================================================================================
+
+Q22: Why is API versioning important?
+───────────────────────────────────────
+A: Versioning lets you evolve your API without breaking existing clients.
+
+   Scenario: you have clients using /api/products. You need to change the
+   response structure (e.g., rename a field). Without versioning, all
+   existing clients break.
+
+   With versioning:
+   • /api/v1/products — returns old structure (still works for old clients).
+   • /api/v2/products — returns new structure (new clients use this).
+   • Old clients continue to work; new clients get the improved API.
+   • You can deprecate v1 with a sunset date.
+
+────────────────────────────────────────────────────────────────────────────────
+Q23: What are the different API versioning strategies?
+───────────────────────────────────────────────────────
+A: Four common strategies:
+
+   1. URL PATH VERSIONING (most common, most visible):
+      GET /api/v1/products
+      GET /api/v2/products
+      • Pros: obvious, easy to test in browser, cacheable.
+      • Cons: URLs are not "clean" by REST purist standards.
+
+   2. QUERY STRING VERSIONING:
+      GET /api/products?api-version=1.0
+      • Pros: path stays clean.
+      • Cons: easy to forget; caching can ignore query strings.
+
+   3. HEADER VERSIONING:
+      GET /api/products  →  Header: api-version: 1.0
+      • Pros: cleanest URLs.
+      • Cons: hidden from URL; harder to test/bookmark.
+
+   4. MEDIA TYPE (Accept header) VERSIONING:
+      Accept: application/json;v=1.0
+      • Most REST-pure approach.
+      • Cons: complex to implement and consume.
+
+   NuGet: Asp.Versioning.Mvc (formerly Microsoft.AspNetCore.Mvc.Versioning)
+
+     builder.Services.AddApiVersioning(opts => {
+         opts.DefaultApiVersion = new ApiVersion(1, 0);
+         opts.AssumeDefaultVersionWhenUnspecified = true;
+         opts.ReportApiVersions = true;   // adds api-supported-versions response header
+     }).AddApiExplorer(opts => {
+         opts.GroupNameFormat = "'v'VVV";
+         opts.SubstituteApiVersionInUrl = true;
+     });
+
+     [ApiController]
+     [ApiVersion("1.0")]
+     [ApiVersion("2.0")]
+     [Route("api/v{version:apiVersion}/[controller]")]
+     public class ProductsController : ControllerBase
+     {
+         [HttpGet]
+         [MapToApiVersion("1.0")]
+         public IActionResult GetV1() => Ok("v1 response");
+
+         [HttpGet]
+         [MapToApiVersion("2.0")]
+         public IActionResult GetV2() => Ok("v2 response");
+     }
+
+================================================================================
+SECTION 11: ERROR HANDLING AND PROBLEM DETAILS
+================================================================================
+
+Q24: What is Problem Details (RFC 7807)?
+──────────────────────────────────────────
+A: Problem Details is an RFC 7807 standard for machine-readable error responses
+   in HTTP APIs. It defines a consistent JSON structure for errors.
+
+   Standard fields:
+   {
+     "type":     "https://tools.ietf.org/html/rfc7231#section-6.5.1",
+     "title":    "Bad Request",
+     "status":   400,
+     "detail":   "The 'price' field must be greater than 0.",
+     "instance": "/api/products/create",
+     "traceId":  "00-abc...def-01"
+   }
+
+   ASP.NET Core [ApiController] automatically uses ProblemDetails for 4xx/5xx.
+
+   Custom ProblemDetails (extend the standard):
+     public class ValidationProblemDetails : ProblemDetails
+     {
+         public IDictionary<string, string[]> Errors { get; set; }
+     }
+
+   .NET 7+ — ProblemDetails service:
+     builder.Services.AddProblemDetails(opts => {
+         opts.CustomizeProblemDetails = ctx => {
+             ctx.ProblemDetails.Extensions["traceId"] =
+                 Activity.Current?.Id ?? ctx.HttpContext.TraceIdentifier;
+         };
+     });
+
+────────────────────────────────────────────────────────────────────────────────
+Q25: How do you implement global exception handling in Web API?
+───────────────────────────────────────────────────────────────
+A: Three main approaches:
+
+   1. EXCEPTION HANDLER MIDDLEWARE (built-in):
+     app.UseExceptionHandler(errApp =>
+         errApp.Run(async ctx =>
+         {
+             var feature = ctx.Features.Get<IExceptionHandlerPathFeature>();
+             var ex = feature?.Error;
+
+             ctx.Response.ContentType = "application/problem+json";
+             ctx.Response.StatusCode  = ex is NotFoundException ? 404 : 500;
+
+             var problem = new ProblemDetails
+             {
+                 Status = ctx.Response.StatusCode,
+                 Title  = "An error occurred",
+                 Detail = ex?.Message
+             };
+             await ctx.Response.WriteAsJsonAsync(problem);
+         }));
+
+   2. IExceptionHandler (.NET 8+ recommended):
+     public class GlobalExceptionHandler : IExceptionHandler
+     {
+         public async ValueTask<bool> TryHandleAsync(
+             HttpContext ctx, Exception ex, CancellationToken ct)
+         {
+             var status = ex switch
+             {
+                 NotFoundException          => StatusCodes.Status404NotFound,
+                 ValidationException        => StatusCodes.Status400BadRequest,
+                 UnauthorizedAccessException=> StatusCodes.Status403Forbidden,
+                 _                          => StatusCodes.Status500InternalServerError
+             };
+             var problem = new ProblemDetails { Status = status, Detail = ex.Message };
+             ctx.Response.StatusCode = status;
+             await ctx.Response.WriteAsJsonAsync(problem, ct);
+             return true;
+         }
+     }
+     builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+     builder.Services.AddProblemDetails();
+     app.UseExceptionHandler();
+
+   3. EXCEPTION FILTER (MVC-layer only, misses middleware exceptions):
+     public class ApiExceptionFilter : IExceptionFilter
+     {
+         public void OnException(ExceptionContext ctx)
+         {
+             if (ctx.Exception is NotFoundException)
+             {
+                 ctx.Result = new NotFoundObjectResult(
+                     new ProblemDetails { Status = 404, Detail = ctx.Exception.Message });
+                 ctx.ExceptionHandled = true;
+             }
+         }
+     }
+
+   Recommendation: use IExceptionHandler (.NET 8+) or UseExceptionHandler middleware
+   for broad coverage.
+
+================================================================================
+SECTION 12: FILTERS IN WEB API
+================================================================================
+
+Q26: What are Action Filters in Web API and when should you use them?
+──────────────────────────────────────────────────────────────────────
+A: Action Filters intercept before/after an action method runs. Common uses in
+   Web API:
+
+   LOGGING:
+     public class ApiLoggingFilter : IActionFilter
+     {
+         private readonly ILogger<ApiLoggingFilter> _logger;
+         public ApiLoggingFilter(ILogger<ApiLoggingFilter> logger) => _logger = logger;
+
+         public void OnActionExecuting(ActionExecutingContext ctx)
+             => _logger.LogInformation("→ {Action}", ctx.ActionDescriptor.DisplayName);
+
+         public void OnActionExecuted(ActionExecutedContext ctx)
+             => _logger.LogInformation("← {Action} {Status}",
+                 ctx.ActionDescriptor.DisplayName, ctx.HttpContext.Response.StatusCode);
+     }
+
+   VALIDATION (alternative to automatic [ApiController] validation):
+     public class ValidateModelFilter : IActionFilter
+     {
+         public void OnActionExecuting(ActionExecutingContext ctx)
+         {
+             if (!ctx.ModelState.IsValid)
+                 ctx.Result = new BadRequestObjectResult(ctx.ModelState);
+         }
+         public void OnActionExecuted(ActionExecutedContext ctx) { }
+     }
+
+   CACHE RESULT:
+   • Check cache in OnActionExecuting, serve from cache and short-circuit.
+   • Store result in OnActionExecuted.
+
+   Register globally:
+     builder.Services.AddControllers(opts =>
+         opts.Filters.Add<ApiLoggingFilter>());
+
+   Or on specific controller/action:
+     [ServiceFilter(typeof(ApiLoggingFilter))]
+     public class ProductsController : ControllerBase { ... }
+
+================================================================================
+SECTION 13: HTTPCLIENT AND CALLING EXTERNAL APIS
+================================================================================
+
+Q27: What is IHttpClientFactory and why should you use it instead of new HttpClient()?
+────────────────────────────────────────────────────────────────────────────────────────
+A: Creating new HttpClient() in every request is a well-known mistake in .NET:
+   • Socket exhaustion — TCP connections are not immediately released when HttpClient
+     is disposed; creating many short-lived HttpClient instances depletes available
+     sockets (TIME_WAIT state).
+   • Does not respect DNS changes — HttpClient caches DNS lookups; if the IP
+     changes, it will keep using the old one until the handler is recycled.
+
+   IHttpClientFactory solves both by managing a pool of HttpMessageHandler instances:
+   • Reuses underlying connections (socket pool) — no exhaustion.
+   • Recycles handlers periodically (default 2 min) — picks up DNS changes.
+
+   BASIC USAGE:
+     builder.Services.AddHttpClient();
+
+     // Inject IHttpClientFactory
+     public class MyService
+     {
+         private readonly IHttpClientFactory _factory;
+         public MyService(IHttpClientFactory factory) => _factory = factory;
+
+         public async Task<string> GetDataAsync()
+         {
+             var client = _factory.CreateClient();
+             return await client.GetStringAsync("https://api.example.com/data");
+         }
+     }
+
+   NAMED CLIENT:
+     builder.Services.AddHttpClient("GitHub", client => {
+         client.BaseAddress = new Uri("https://api.github.com/");
+         client.DefaultRequestHeaders.Add("User-Agent", "MyApp");
+     });
+     // Use: _factory.CreateClient("GitHub")
+
+   TYPED CLIENT (preferred — strongly typed, injectable):
+     public class GitHubClient
+     {
+         private readonly HttpClient _http;
+         public GitHubClient(HttpClient http) => _http = http;
+         public Task<Repo[]?> GetReposAsync(string user)
+             => _http.GetFromJsonAsync<Repo[]>($"users/{user}/repos");
+     }
+     builder.Services.AddHttpClient<GitHubClient>(client => {
+         client.BaseAddress = new Uri("https://api.github.com/");
+     });
+
+────────────────────────────────────────────────────────────────────────────────
+Q28: What is Polly and how do you use it for resilience?
+─────────────────────────────────────────────────────────
+A: Polly is a .NET resilience library for transient fault handling:
+   retry, circuit breaker, timeout, bulkhead, fallback, rate limiting.
+
+   In .NET 8+, Microsoft.Extensions.Http.Resilience wraps Polly:
+     builder.Services.AddHttpClient<GitHubClient>()
+         .AddStandardResilienceHandler();     // retry + circuit breaker + timeout
+
+   Manual Polly policies:
+     builder.Services.AddHttpClient<GitHubClient>()
+         .AddTransientHttpErrorPolicy(p =>
+             p.WaitAndRetryAsync(3, attempt =>
+                 TimeSpan.FromSeconds(Math.Pow(2, attempt))))  // exponential backoff
+         .AddTransientHttpErrorPolicy(p =>
+             p.CircuitBreakerAsync(5, TimeSpan.FromSeconds(30)));
+
+   Key policies:
+   • Retry              — retry on transient failures (5xx, network errors).
+   • Circuit Breaker    — stop calling a failing service; "trip" after N failures
+                          for a cooldown period, then try again.
+   • Timeout            — abort a request taking too long.
+   • Bulkhead Isolation — limit concurrent calls to an external service.
+   • Fallback           — return a default value if all retries fail.
+
+================================================================================
+SECTION 14: OPENAPI / SWAGGER
+================================================================================
+
+Q29: What is OpenAPI/Swagger and how do you set it up?
+────────────────────────────────────────────────────────
+A: OpenAPI (formerly Swagger) is a specification for describing REST APIs in a
+   machine-readable format (JSON/YAML). Tools can then:
+   • Generate interactive documentation (Swagger UI).
+   • Generate client SDKs in any language.
+   • Generate automated tests.
+
+   In .NET — two main options:
+
+   SWASHBUCKLE (classic, widely used):
+     NuGet: Swashbuckle.AspNetCore
+     builder.Services.AddEndpointsApiExplorer();
+     builder.Services.AddSwaggerGen(c => {
+         c.SwaggerDoc("v1", new OpenApiInfo {
+             Title   = "My API",
+             Version = "v1",
+             Description = "Product management API"
+         });
+         // Include XML comments
+         var xml = Path.Combine(AppContext.BaseDirectory,
+             $"{Assembly.GetExecutingAssembly().GetName().Name}.xml");
+         c.IncludeXmlComments(xml);
+         // JWT auth in Swagger UI
+         c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme {
+             Type   = SecuritySchemeType.Http,
+             Scheme = "bearer"
+         });
+     });
+     app.UseSwagger();
+     app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "My API v1"));
+
+   SCALAR (.NET 9 default):
+     builder.Services.AddOpenApi();
+     app.MapOpenApi();
+     app.MapScalarApiReference(); // NuGet: Scalar.AspNetCore
+
+   Useful attributes for Swagger documentation:
+     [ProducesResponseType<ProductDto>(StatusCodes.Status200OK)]
+     [ProducesResponseType(StatusCodes.Status404NotFound)]
+     [Produces("application/json")]
+     [Consumes("application/json")]
+     /// <summary>Get a product by ID</summary>
+     /// <param name="id">The product identifier</param>
+
+================================================================================
+SECTION 15: MINIMAL APIS
+================================================================================
+
+Q30: What are Minimal APIs? When should you use them over Controllers?
+───────────────────────────────────────────────────────────────────────
+A: Minimal APIs define HTTP endpoints directly in Program.cs (or in extension
+   methods) without controllers, attributes, or ceremony.
+
+     var app = WebApplication.Create(args);
+
+     app.MapGet("/products", async (AppDbContext db) =>
+         await db.Products.ToListAsync());
+
+     app.MapGet("/products/{id:int}", async (int id, AppDbContext db) =>
+         await db.Products.FindAsync(id) is Product p
+             ? Results.Ok(p) : Results.NotFound());
+
+     app.MapPost("/products", async (CreateProductRequest req, AppDbContext db) => {
+         var product = new Product { Name = req.Name, Price = req.Price };
+         db.Products.Add(product);
+         await db.SaveChangesAsync();
+         return Results.Created($"/products/{product.Id}", product);
+     });
+
+     app.Run();
+
+   Use Minimal APIs when:
+   • Building microservices or small focused services.
+   • Prototyping quickly.
+   • You want maximum performance (lower overhead than MVC).
+   • Fewer than ~10-20 endpoints.
+
+   Use Controllers when:
+   • Large application with many endpoints.
+   • Teams need consistent conventions (filters, routes, versioning).
+   • Need action filters, result filters, complex model binding.
+   • Code needs to be testable with controller-level unit tests.
+
+────────────────────────────────────────────────────────────────────────────────
+Q31: How do you apply filters, validation, and auth to Minimal API endpoints?
+──────────────────────────────────────────────────────────────────────────────
+A: Minimal APIs use extension methods on RouteHandlerBuilder:
+
+   AUTH:
+     app.MapGet("/admin", () => "secret").RequireAuthorization("AdminOnly");
+     app.MapGet("/public", () => "hello").AllowAnonymous();
+
+   RATE LIMITING:
+     app.MapGet("/products", ...).RequireRateLimiting("fixed");
+
+   CORS:
+     app.MapGet("/data", ...).RequireCors("AllowAll");
+
+   CACHING:
+     app.MapGet("/products", ...).CacheOutput(p => p.Expire(TimeSpan.FromMinutes(5)));
+
+   VALIDATION VIA ENDPOINT FILTERS (.NET 7+):
+     app.MapPost("/products", async (CreateProductRequest req, IProductService svc) =>
+     {
+         await svc.CreateAsync(req);
+         return Results.Created();
+     })
+     .AddEndpointFilter<ValidationFilter<CreateProductRequest>>();
+
+     // Generic validation filter:
+     public class ValidationFilter<T> : IEndpointFilter
+     {
+         public async ValueTask<object?> InvokeAsync(
+             EndpointFilterInvocationContext ctx, EndpointFilterDelegate next)
+         {
+             var arg = ctx.Arguments.OfType<T>().FirstOrDefault();
+             if (arg is IValidatableObject v)
+             {
+                 var results = v.Validate(new ValidationContext(v)).ToList();
+                 if (results.Any())
+                     return Results.ValidationProblem(
+                         results.ToDictionary(r => r.MemberNames.First(),
+                                              r => new[] { r.ErrorMessage! }));
+             }
+             return await next(ctx);
+         }
+     }
+
+================================================================================
+SECTION 16: PERFORMANCE IN WEB API
+================================================================================
+
+Q32: What is response compression and how do you enable it?
+────────────────────────────────────────────────────────────
+A: Response compression reduces the size of API responses (JSON payloads) using
+   gzip or Brotli, reducing bandwidth and improving client load times.
+
+     builder.Services.AddResponseCompression(opts => {
+         opts.EnableForHttps = true;       // compress HTTPS (safe for APIs)
+         opts.Providers.Add<BrotliCompressionProvider>();
+         opts.Providers.Add<GzipCompressionProvider>();
+         opts.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(
+             new[] { "application/json" });
+     });
+     builder.Services.Configure<BrotliCompressionProviderOptions>(
+         opts => opts.Level = CompressionLevel.Fastest);
+
+     app.UseResponseCompression();  // before routing
+
+   Client must send: Accept-Encoding: gzip, br
+   Server responds with: Content-Encoding: gzip
+
+   Important: Never compress already-compressed content (images, zip files).
+
+────────────────────────────────────────────────────────────────────────────────
+Q33: What is output caching in .NET 7+ Web API?
+─────────────────────────────────────────────────
+A: Output caching stores complete HTTP responses on the server and serves them
+   for subsequent identical requests — no controller/service code runs for cached hits.
+
+     builder.Services.AddOutputCache(opts => {
+         opts.AddBasePolicy(b => b.Expire(TimeSpan.FromSeconds(10)));
+         opts.AddPolicy("Products", b => b
+             .Expire(TimeSpan.FromMinutes(5))
+             .VaryByRouteValue("id")
+             .VaryByQueryString("sort", "page")
+             .Tag("products-tag"));
+     });
+     app.UseOutputCache();
+
+   Apply:
+     [HttpGet]
+     [OutputCache(PolicyName = "Products")]
+     public async Task<ActionResult<IEnumerable<ProductDto>>> GetAll() { ... }
+
+   Invalidate (e.g., after a write):
+     await _outputCache.EvictByTagAsync("products-tag", cancellationToken);
+
+────────────────────────────────────────────────────────────────────────────────
+Q34: What is async streaming and IAsyncEnumerable in Web API?
+──────────────────────────────────────────────────────────────
+A: Returning IAsyncEnumerable<T> from an action streams results to the client
+   as they are produced — without buffering the entire collection in memory.
+
+   Traditional (buffers everything):
+     public async Task<ActionResult<List<Product>>> GetAll()
+         => await _db.Products.ToListAsync();  // loads 100k rows into RAM first
+
+   Streaming (incremental):
+     public async IAsyncEnumerable<Product> GetAll(
+         [EnumeratorCancellation] CancellationToken ct)
+     {
+         await foreach (var p in _db.Products.AsAsyncEnumerable()
+                                              .WithCancellation(ct))
+             yield return p;
+     }
+
+   ASP.NET Core serializes each item to JSON as it arrives.
+   Benefits:
+   • Low memory usage — no buffering large result sets.
+   • Client receives first results faster (time-to-first-byte).
+   • Naturally integrates with CancellationToken (client disconnects → stops DB query).
+
+================================================================================
+SECTION 17: TESTING WEB API
+================================================================================
+
+Q35: How do you unit test a Web API controller?
+─────────────────────────────────────────────────
+A: Mock all dependencies; test the controller in isolation.
+
+     public class ProductsControllerTests
+     {
+         private readonly Mock<IProductService> _mockSvc = new();
+         private readonly ProductsController   _controller;
+
+         public ProductsControllerTests()
+             => _controller = new ProductsController(_mockSvc.Object);
+
+         [Fact]
+         public async Task Get_ExistingId_ReturnsOkWithProduct()
+         {
+             // Arrange
+             _mockSvc.Setup(s => s.GetByIdAsync(1))
+                     .ReturnsAsync(new ProductDto(1, "Widget", 9.99m));
+
+             // Act
+             var result = await _controller.Get(1);
+
+             // Assert
+             var ok = Assert.IsType<OkObjectResult>(result.Result);
+             var dto = Assert.IsType<ProductDto>(ok.Value);
+             Assert.Equal("Widget", dto.Name);
+         }
+
+         [Fact]
+         public async Task Get_MissingId_ReturnsNotFound()
+         {
+             _mockSvc.Setup(s => s.GetByIdAsync(99)).ReturnsAsync((ProductDto?)null);
+             var result = await _controller.Get(99);
+             Assert.IsType<NotFoundResult>(result.Result);
+         }
+
+         [Fact]
+         public async Task Create_ValidRequest_Returns201()
+         {
+             var req = new CreateProductRequest("Widget", 9.99m);
+             _mockSvc.Setup(s => s.CreateAsync(req))
+                     .ReturnsAsync(new ProductDto(1, "Widget", 9.99m));
+
+             var result = await _controller.Create(req);
+
+             var created = Assert.IsType<CreatedAtActionResult>(result.Result);
+             Assert.Equal(201, created.StatusCode);
+         }
+     }
+
+────────────────────────────────────────────────────────────────────────────────
+Q36: How do you write integration tests for a Web API?
+───────────────────────────────────────────────────────
+A: Use WebApplicationFactory<TProgram> to spin up the full API in memory.
+
+     public class ProductsApiTests : IClassFixture<WebApplicationFactory<Program>>
+     {
+         private readonly HttpClient _client;
+
+         public ProductsApiTests(WebApplicationFactory<Program> factory)
+         {
+             _client = factory.WithWebHostBuilder(builder =>
+                 builder.ConfigureServices(services =>
+                 {
+                     // Replace real DB with in-memory
+                     services.RemoveAll<DbContextOptions<AppDbContext>>();
+                     services.AddDbContext<AppDbContext>(opts =>
+                         opts.UseInMemoryDatabase("IntegrationTestDb"));
+                 }))
+                 .CreateClient(new WebApplicationFactoryClientOptions
+                 {
+                     AllowAutoRedirect = false
+                 });
+         }
+
+         [Fact]
+         public async Task GetProducts_Returns200AndJson()
+         {
+             var response = await _client.GetAsync("/api/products");
+
+             response.EnsureSuccessStatusCode();
+             Assert.Equal("application/json", response.Content.Headers.ContentType!.MediaType);
+
+             var products = await response.Content.ReadFromJsonAsync<ProductDto[]>();
+             Assert.NotNull(products);
+         }
+
+         [Fact]
+         public async Task CreateProduct_ValidBody_Returns201()
+         {
+             var body = new CreateProductRequest("Widget", 9.99m);
+             var response = await _client.PostAsJsonAsync("/api/products", body);
+
+             Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+             Assert.NotNull(response.Headers.Location);
+         }
+
+         [Fact]
+         public async Task CreateProduct_MissingName_Returns400()
+         {
+             var body = new { Price = 9.99 };  // missing Name
+             var response = await _client.PostAsJsonAsync("/api/products", body);
+             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+         }
+     }
+
+================================================================================
+SECTION 18: ADVANCED TOPICS
+================================================================================
+
+Q37: What is HATEOAS and should you implement it?
+──────────────────────────────────────────────────
+A: HATEOAS (Hypermedia As The Engine Of Application State) is a REST constraint
+   where the API response includes links to related actions — clients discover
+   navigation from the response itself rather than hardcoding URLs.
+
+   Example response WITH HATEOAS:
+     {
+       "id": 5,
+       "name": "Widget",
+       "price": 9.99,
+       "_links": {
+         "self":   { "href": "/api/products/5",       "method": "GET"    },
+         "update": { "href": "/api/products/5",       "method": "PUT"    },
+         "delete": { "href": "/api/products/5",       "method": "DELETE" },
+         "reviews":{ "href": "/api/products/5/reviews","method": "GET"   }
+       }
+     }
+
+   In theory: clients need only know the entry point URL; everything else is
+   discoverable. True REST Level 3 (Richardson Maturity Model).
+
+   In practice:
+   • Very few real-world APIs implement full HATEOAS.
+   • Most stop at REST Level 2 (verbs + resources).
+   • The overhead of building and maintaining links is high.
+   • Worth implementing for public APIs where clients are external and unknown.
+   • Probably overkill for internal APIs where client and server are co-developed.
+
+────────────────────────────────────────────────────────────────────────────────
+Q38: What is the Richardson Maturity Model?
+────────────────────────────────────────────
+A: The Richardson Maturity Model defines 4 levels of REST API maturity:
+
+   Level 0 — The Swamp of POX:
+   • Single endpoint, single HTTP method (usually POST).
+   • All operations go to POST /api  with action in the body.
+   • Example: SOAP, XML-RPC.
+
+   Level 1 — Resources:
+   • Multiple endpoints (resources), still uses POST for everything.
+   • POST /products, POST /orders — separate URLs but wrong methods.
+
+   Level 2 — HTTP Verbs:
+   • Uses HTTP methods correctly: GET, POST, PUT, DELETE.
+   • Uses appropriate status codes (201, 404, 400, etc.).
+   • This is what most people call "REST." The vast majority of "REST APIs" are here.
+
+   Level 3 — Hypermedia Controls (HATEOAS):
+   • Responses include links to next actions.
+   • Client-server fully decoupled through hypermedia.
+   • True REST (Fielding's definition).
+
+   Most production APIs aim for Level 2. Level 3 is a bonus.
+
+────────────────────────────────────────────────────────────────────────────────
+Q39: What is OData and when should you use it?
+────────────────────────────────────────────────
+A: OData (Open Data Protocol) is a standard for building queryable REST APIs.
+   It lets clients control filtering, sorting, paging, and projection via the URL.
+
+   Client can do:
+     GET /odata/products?$filter=Price gt 10&$orderby=Name&$top=5&$select=Name,Price
+     GET /odata/products?$expand=Category
+     GET /odata/products/$count
+
+   Server setup:
+     // NuGet: Microsoft.AspNetCore.OData
+     builder.Services.AddControllers().AddOData(opts =>
+         opts.Select().Filter().OrderBy().Expand().Count().SetMaxTop(100));
+
+     [EnableQuery]
+     [HttpGet]
+     public IQueryable<Product> Get() => _db.Products;
+
+   When to use OData:
+   • Data exploration tools, admin dashboards, reporting — clients need flexible queries.
+   • You want to avoid writing dozens of specific filter endpoints.
+
+   When NOT to use OData:
+   • Simple CRUD APIs — overkill.
+   • Security-sensitive endpoints — flexible queries can lead to data leaks or
+     expensive DB queries if not carefully limited.
+   • Public APIs where query complexity is hard to control.
+
+────────────────────────────────────────────────────────────────────────────────
+Q40: What is GraphQL and how does it compare to REST?
+─────────────────────────────────────────────────────
+A: GraphQL is a query language and runtime for APIs where clients specify EXACTLY
+   what data they need in a single request.
+
+   REST issues GraphQL solves:
+   • Over-fetching — GET /products returns all fields; client only needs name + price.
+   • Under-fetching — need product + reviews + seller → 3 REST calls vs 1 GraphQL.
+   • Versioning — clients query exactly what they need; server can add fields without
+     breaking old queries.
+
+   GraphQL query:
+     query {
+       product(id: 5) {
+         name
+         price
+         category { name }
+         reviews(first: 3) { rating comment }
+       }
+     }
+
+   In .NET: use Hot Chocolate or Strawberry Shake.
+
+   When to prefer GraphQL:
+   • Mobile clients (bandwidth-sensitive, varying data needs).
+   • Complex, highly interconnected data graphs.
+   • Multiple clients needing different shapes of the same data.
+
+   When to prefer REST:
+   • Simple CRUD APIs.
+   • Public APIs with external tooling that expects REST.
+   • Caching (REST caches naturally via URLs; GraphQL caching is complex).
+   • File uploads, streaming.
+
+────────────────────────────────────────────────────────────────────────────────
+Q41: What is gRPC and when should you use it in .NET?
+──────────────────────────────────────────────────────
+A: gRPC is a high-performance RPC (Remote Procedure Call) framework using:
+   • Protocol Buffers (protobuf) — binary serialization (smaller, faster than JSON).
+   • HTTP/2 — multiplexed, bidirectional streaming.
+   • Strongly typed contracts (.proto files generate client/server code).
+
+   Service definition (.proto):
+     service ProductService {
+       rpc GetProduct (ProductRequest) returns (ProductResponse);
+       rpc ListProducts (ListRequest) returns (stream ProductResponse);
+     }
+
+   In .NET:
+     // NuGet: Grpc.AspNetCore
+     builder.Services.AddGrpc();
+     app.MapGrpcService<ProductGrpcService>();
+
+   Streaming types:
+   • Unary         — one request, one response (like a normal HTTP call).
+   • Server streaming — one request, stream of responses.
+   • Client streaming — stream of requests, one response.
+   • Bidirectional streaming — both sides stream (chat, real-time).
+
+   When to use gRPC:
+   • Internal microservice-to-microservice communication (not browser-facing).
+   • High-throughput, low-latency scenarios (binary beats JSON).
+   • You need streaming (server push, real-time data).
+   • Strong contract enforcement across teams.
+
+   When NOT to use gRPC:
+   • Browser clients (limited HTTP/2 support — use grpc-web).
+   • Public APIs (JSON/REST is universally accessible).
+   • Debugging — binary protocol is harder to inspect than JSON.
+
+────────────────────────────────────────────────────────────────────────────────
+Q42: What is Rate Limiting in .NET 7+ and how do you set it up for a Web API?
+──────────────────────────────────────────────────────────────────────────────
+A: Rate limiting controls how many requests a client can make in a time window.
+   Built into .NET 7+ via System.Threading.RateLimiting.
+
+   Algorithms:
+   • Fixed Window  — N requests per fixed window (e.g., 100 per minute).
+   • Sliding Window— smoother version; window moves continuously.
+   • Token Bucket  — tokens refilled at a rate; burst traffic allowed up to bucket size.
+   • Concurrency   — limit simultaneous in-flight requests.
+
+   Setup:
+     builder.Services.AddRateLimiter(opts =>
+     {
+         opts.AddFixedWindowLimiter("api", o =>
+         {
+             o.Window       = TimeSpan.FromMinutes(1);
+             o.PermitLimit  = 100;
+             o.QueueLimit   = 10;
+             o.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+         });
+
+         // Per-user rate limiting (key by IP or user ID)
+         opts.AddPolicy("per-user", ctx =>
+             RateLimitPartition.GetFixedWindowLimiter(
+                 partitionKey: ctx.User.Identity?.Name ?? ctx.Connection.RemoteIpAddress?.ToString(),
+                 factory: _ => new FixedWindowRateLimiterOptions
+                 {
+                     Window      = TimeSpan.FromMinutes(1),
+                     PermitLimit = 60
+                 }));
+
+         opts.OnRejected = async (ctx, ct) =>
+         {
+             ctx.HttpContext.Response.StatusCode = 429;
+             await ctx.HttpContext.Response.WriteAsJsonAsync(
+                 new ProblemDetails { Status = 429, Title = "Too many requests." }, ct);
+         };
+     });
+     app.UseRateLimiter();
+
+   Apply:
+     app.MapControllers().RequireRateLimiting("api");
+     // or per action:
+     [EnableRateLimiting("per-user")]
+     [HttpGet]
+     public IActionResult Search() { ... }
+
+────────────────────────────────────────────────────────────────────────────────
+Q43: What is the difference between synchronous and asynchronous APIs?
+───────────────────────────────────────────────────────────────────────
+A: This question is asked in two different senses:
+
+   1. ASYNC C# (async/await in action methods):
+      Always use async action methods for I/O operations (DB, HTTP, file).
+      Releases the thread pool thread while waiting, allowing the server to
+      handle more concurrent requests.
+      Rule: If the operation does I/O, it should be async.
+
+   2. ASYNC API PATTERNS (request-response vs. message-based):
+      Synchronous API: client sends request → server processes → client waits
+      for response. Works well for fast operations (< 1 sec).
+
+      Asynchronous API: client sends request → server accepts it (202 Accepted)
+      → client polls or gets notified when done. Used for:
+      • Long-running operations (report generation, video transcoding).
+      • Decoupled microservices via message queues (RabbitMQ, Azure Service Bus).
+      • Webhooks — server calls back client URL when done.
+
+      Pattern:
+        POST /reports          → 202 Accepted, Location: /reports/status/abc
+        GET  /reports/status/abc → 200 { "status": "processing" }
+        GET  /reports/status/abc → 200 { "status": "complete", "url": "/reports/abc.pdf" }
+
+================================================================================
+SECTION 19: API BEST PRACTICES
+================================================================================
+
+Q44: What are REST API design best practices?
+──────────────────────────────────────────────
+A:
+   URL DESIGN:
+   • Use nouns, not verbs: /products NOT /getProducts.
+   • Plural resource names: /products, /orders, /users.
+   • Nested resources for relationships: /orders/5/items.
+   • Lowercase, hyphens for readability: /product-categories.
+   • No file extensions: /products NOT /products.json.
+
+   HTTP METHODS:
+   • Use correct verbs (GET, POST, PUT, PATCH, DELETE).
+   • GET must be safe and idempotent — no side effects.
+   • Prefer PATCH over PUT for partial updates.
+
+   STATUS CODES:
+   • Return appropriate codes (201 for create, 204 for delete, 404 for missing).
+   • Never return 200 with { "success": false } in the body.
+
+   RESPONSES:
+   • Always return consistent JSON structure.
+   • Use DTOs — never expose entities directly.
+   • Return ProblemDetails for errors (RFC 7807).
+   • Include pagination metadata for lists.
+
+   VERSIONING:
+   • Version your API from day one.
+   • URL path versioning is most practical: /api/v1/...
+
+   SECURITY:
+   • Always require HTTPS.
+   • Authenticate every non-public endpoint (JWT, OAuth2).
+   • Validate and sanitize all inputs.
+   • Rate-limit all public endpoints.
+   • Avoid exposing internal IDs where possible (use GUIDs).
+
+   PAGINATION:
+     GET /products?page=2&pageSize=20
+     Response headers or body:
+     {
+       "data": [...],
+       "pagination": { "page": 2, "pageSize": 20, "total": 150 }
+     }
+     Or use cursor-based pagination for large, frequently-changing datasets.
+
+   FILTERING AND SORTING:
+     GET /products?category=electronics&minPrice=10&sort=price_asc
+
+────────────────────────────────────────────────────────────────────────────────
+Q45: What is idempotency and why does it matter for APIs?
+──────────────────────────────────────────────────────────
+A: An operation is idempotent if calling it multiple times produces the same result
+   as calling it once.
+
+   HTTP method idempotency:
+   • GET, HEAD, OPTIONS — safe AND idempotent (read-only, no state change).
+   • PUT, DELETE        — idempotent (same effect however many times called).
+   • POST               — NOT idempotent (each call may create a new resource).
+   • PATCH              — NOT guaranteed idempotent (depends on the operation).
+
+   Why it matters:
+   • Network failures — clients retry failed requests. If POST is retried, you
+     could create duplicate orders, charge a credit card twice, etc.
+   • Load balancers / proxies — may retry requests automatically.
+
+   Making POST idempotent with Idempotency Keys:
+   • Client generates a unique key (UUID) and sends it in a header:
+     POST /orders  →  Idempotency-Key: a8098c1a-f86e-11da-bd1a-00112444be1e
+   • Server stores processed keys. If the same key arrives again, return the
+     original response without re-processing.
+   • Stripe, PayPal, and most payment APIs use this pattern.
+
+================================================================================
+QUICK-REFERENCE CHEAT SHEET
+================================================================================
+
+RESTFUL URL CONVENTIONS:
+  GET    /api/products            → list all
+  GET    /api/products/{id}       → get one
+  POST   /api/products            → create new
+  PUT    /api/products/{id}       → full replace
+  PATCH  /api/products/{id}       → partial update
+  DELETE /api/products/{id}       → delete
+  GET    /api/products/{id}/reviews → nested resource
+
+STATUS CODES QUICK MAP:
+  200 OK           → GET / PATCH success with body
+  201 Created      → POST success
+  204 No Content   → DELETE / PUT success (no body)
+  400 Bad Request  → validation error / malformed request
+  401 Unauthorized → not authenticated
+  403 Forbidden    → authenticated but not authorized
+  404 Not Found    → resource does not exist
+  409 Conflict     → duplicate / concurrency issue
+  422 Unprocessable→ semantic validation error
+  429 Too Many Req → rate limit exceeded
+  500 Server Error → unhandled exception
+
+PROGRAM.CS TYPICAL WEB API ORDER:
+  builder.Services.AddDbContext<...>
+  builder.Services.AddAuthentication(...).AddJwtBearer(...)
+  builder.Services.AddAuthorization(...)
+  builder.Services.AddControllers() / AddApiVersioning
+  builder.Services.AddOutputCache / AddResponseCompression
+  builder.Services.AddRateLimiter(...)
+  builder.Services.AddSwaggerGen / AddOpenApi
+  builder.Services.AddEndpointsApiExplorer()
+
+  app.UseExceptionHandler(...)
+  app.UseHttpsRedirection()
+  app.UseResponseCompression()
+  app.UseCors(...)
+  app.UseRouting()
+  app.UseAuthentication()
+  app.UseAuthorization()
+  app.UseOutputCache()
+  app.UseRateLimiter()
+  app.MapControllers()
+  app.UseSwagger() / app.MapOpenApi()
+  app.Run()
+
+JWT ANATOMY:
+  Header:    { "alg": "HS256", "typ": "JWT" }
+  Payload:   { "sub": "1", "email": "a@b.com", "role": "Admin", "exp": 9999 }
+  Signature: HMAC-SHA256(base64(header) + "." + base64(payload), secret)
+  Token:     base64(header).base64(payload).signature
+
+HTTPCLIENT RULES:
+  ❌ new HttpClient() in method body  → socket exhaustion
+  ✅ IHttpClientFactory               → pooled, DNS-aware
+  ✅ Typed client (AddHttpClient<T>)  → injectable, strongly typed
+  ✅ Polly / AddStandardResilienceHandler → retry + circuit breaker
+
+DI LIFETIMES IN WEB API:
+  Transient  → stateless utility (mapper, validator helper)
+  Scoped     → per-request (DbContext, unit of work, request-scoped cache)
+  Singleton  → thread-safe, shared (HttpClient, configuration, memory cache)
+  ❌ Never inject Scoped into Singleton (captive dependency)
+
+API SECURITY CHECKLIST:
+  ✓ HTTPS enforced (UseHttpsRedirection + HSTS)
+  ✓ JWT validated (issuer, audience, signature, expiry)
+  ✓ [Authorize] on all non-public endpoints
+  ✓ Input validated server-side (FluentValidation / Data Annotations)
+  ✓ EF Core parameterized queries (no string concatenation)
+  ✓ Secrets in User Secrets / env vars / Key Vault (not appsettings.json)
+  ✓ Rate limiting on public endpoints
+  ✓ CORS locked down (not AllowAnyOrigin in prod)
+  ✓ DTOs used (no entity exposure — no over-posting / over-fetching)
+  ✓ ProblemDetails for consistent error responses
+  ✓ Sensitive data not logged (passwords, tokens, PII)
+
+================================================================================
+END OF FILE — .NET CORE WEB API INTERVIEW QUESTIONS
+================================================================================

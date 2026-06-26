@@ -1,0 +1,1862 @@
+================================================================================
+         .NET CORE WEB MVC — INTERVIEW QUESTIONS (BASIC TO ADVANCED)
+         (With examples and answers)
+================================================================================
+
+HOW TO USE THIS FILE:
+  - Read each Q, think of your own answer first, then check the A.
+  - Sections flow from fundamentals to advanced production topics.
+  - Sections: .NET Core Overview → MVC Architecture → Routing →
+              Controllers → Views & Razor → Model Binding & Validation →
+              Dependency Injection → Middleware → Configuration →
+              Entity Framework Core → Authentication & Authorization →
+              Filters → Session / Cookies / State → Areas →
+              Caching → Logging → Security → Web API within MVC →
+              Background Services → Testing → Performance & Best Practices
+
+================================================================================
+SECTION 1: .NET CORE OVERVIEW
+================================================================================
+
+Q1: What is .NET Core and how is it different from the .NET Framework?
+──────────────────────────────────────────────────────────────────────
+A: .NET Core (now called ".NET 5+" from version 5 onwards) is a cross-platform,
+   open-source, high-performance reimplementation of the .NET platform.
+
+   Key differences from .NET Framework:
+   • Cross-platform: runs on Windows, Linux, macOS; .NET Framework is Windows-only.
+   • Open-source: hosted on GitHub; .NET Framework is proprietary.
+   • Side-by-side deployment: multiple .NET Core versions can coexist on the same
+     machine without conflicts; .NET Framework is machine-wide.
+   • No Windows Registry / GAC dependency.
+   • Modular: ships as NuGet packages — only include what you need.
+   • CLI-first: build/run/publish entirely from the terminal.
+   • Performance: consistently faster (Kestrel vs IIS, Span<T>, etc.).
+   • No support for: WebForms, WCF server, Remoting (use gRPC/REST instead).
+
+   Timeline: .NET Core 1.0 (2016) → 3.1 LTS → .NET 5 (unified) → 6 LTS →
+   8 LTS (current LTS as of 2024) → 9.
+
+────────────────────────────────────────────────────────────────────────────────
+Q2: What is ASP.NET Core MVC?
+──────────────────────────────
+A: ASP.NET Core MVC is a web framework built on top of ASP.NET Core that
+   implements the Model-View-Controller design pattern.
+
+   • Model    — represents the application's data and business logic.
+   • View     — Razor templates that render HTML to the browser.
+   • Controller — receives HTTP requests, calls the Model, selects a View.
+
+   It runs on Kestrel (cross-platform HTTP server), can be hosted behind IIS,
+   Nginx, or in Docker. It supports:
+   - Attribute routing and conventional routing
+   - Tag Helpers, HTML Helpers
+   - Built-in Dependency Injection
+   - Model Binding and Validation
+   - Filters (Authorization, Action, Result, Exception, Resource)
+   - Razor view engine with partial views and view components
+
+────────────────────────────────────────────────────────────────────────────────
+Q3: What is the role of Program.cs in ASP.NET Core?
+─────────────────────────────────────────────────────
+A: Program.cs is the single entry point of an ASP.NET Core application.
+   In .NET 6+ it uses the minimal hosting model (top-level statements):
+
+     var builder = WebApplication.CreateBuilder(args);
+
+     // 1. Register services (DI container)
+     builder.Services.AddControllersWithViews();
+
+     var app = builder.Build();
+
+     // 2. Configure the HTTP request pipeline (middleware)
+     if (!app.Environment.IsDevelopment())
+         app.UseExceptionHandler("/Home/Error");
+
+     app.UseStaticFiles();
+     app.UseRouting();
+     app.UseAuthentication();
+     app.UseAuthorization();
+
+     app.MapControllerRoute(
+         name: "default",
+         pattern: "{controller=Home}/{action=Index}/{id?}");
+
+     app.Run();
+
+   Before .NET 6 there were two files — Program.cs (entry point) and
+   Startup.cs (ConfigureServices + Configure). They were merged into one.
+
+────────────────────────────────────────────────────────────────────────────────
+Q4: What is Kestrel and why is it used?
+────────────────────────────────────────
+A: Kestrel is the built-in, cross-platform, asynchronous HTTP server included
+   with ASP.NET Core. It is the default web server.
+
+   Why it matters:
+   • Very high performance — one of the fastest web servers in TechEmpower
+     benchmarks (uses libuv / System.Net.Sockets + async I/O).
+   • Runs on Linux/macOS/Windows without IIS.
+   • Can be used stand-alone (internet-facing) or behind a reverse proxy
+     (Nginx, IIS, Apache) for production.
+   • Supports HTTP/1.1, HTTP/2, HTTP/3, WebSockets, HTTPS.
+
+   In production it is common to put Nginx/IIS in front of Kestrel to handle
+   SSL termination, load balancing, static file serving, and process management.
+
+────────────────────────────────────────────────────────────────────────────────
+Q5: What is the difference between IIS In-Process and Out-of-Process hosting?
+──────────────────────────────────────────────────────────────────────────────
+A: Both modes are configured in the .csproj / web.config.
+
+   In-Process (default since .NET Core 2.2 on IIS):
+   • ASP.NET Core app runs INSIDE the IIS worker process (w3wp.exe).
+   • Uses IISHttpServer instead of Kestrel.
+   • Faster (no loopback proxy hop).
+   • One app domain per IIS application.
+
+   Out-of-Process:
+   • ASP.NET Core starts its own Kestrel process.
+   • IIS acts as a reverse proxy, forwarding requests to Kestrel.
+   • More isolation — IIS crash doesn't kill the app.
+   • Slightly higher latency (extra hop).
+
+   Set in .csproj: <AspNetCoreHostingModel>InProcess</AspNetCoreHostingModel>
+
+================================================================================
+SECTION 2: MVC ARCHITECTURE
+================================================================================
+
+Q6: Explain the MVC request lifecycle in ASP.NET Core.
+────────────────────────────────────────────────────────
+A: Step-by-step flow of a request:
+
+   1. HTTP request arrives → Kestrel receives it.
+   2. Middleware pipeline processes the request top-to-bottom
+      (logging, auth, routing, etc.).
+   3. Routing middleware matches the URL to a controller/action.
+   4. Resource filters run (can short-circuit).
+   5. Model binding binds route values / query string / body to action parameters.
+   6. Action filters run (OnActionExecuting).
+   7. Action method executes → returns an IActionResult.
+   8. Action filters run (OnActionExecuted).
+   9. Result filters run (OnResultExecuting).
+   10. Result executes (e.g., ViewResult calls Razor to render HTML).
+   11. Result filters run (OnResultExecuted).
+   12. Response travels back up the middleware pipeline.
+   13. Kestrel sends the response to the client.
+
+────────────────────────────────────────────────────────────────────────────────
+Q7: What is the difference between MVC and Razor Pages?
+────────────────────────────────────────────────────────
+A: Both are built on ASP.NET Core but have different organizational models.
+
+   MVC:
+   • Separates concerns into Controllers, Views, Models folders.
+   • One controller can handle many different "pages" (actions).
+   • Better for REST APIs and complex, multi-action flows.
+   • Routes: /Products/Index, /Products/Details/5
+
+   Razor Pages:
+   • Each page is self-contained: Index.cshtml + Index.cshtml.cs (PageModel).
+   • Convention-based routing tied to the file path: /Pages/Products/Index.cshtml
+     → URL /Products/Index.
+   • OnGet() / OnPost() methods replace actions.
+   • Simpler for page-centric CRUD apps; less ceremony.
+   • Both can coexist in the same project.
+
+   Choose MVC for complex multi-action controllers/APIs, Razor Pages for simpler
+   page-centric UIs.
+
+────────────────────────────────────────────────────────────────────────────────
+Q8: What are Action Results in ASP.NET Core MVC?
+──────────────────────────────────────────────────
+A: An IActionResult (or ActionResult<T>) represents the outcome of an action.
+   Common built-in results:
+
+   View-related:
+   • ViewResult          — renders a Razor view (return View(model))
+   • PartialViewResult   — renders a partial view
+   • JsonResult          — serializes object to JSON
+
+   Redirect:
+   • RedirectResult                — 302 to absolute URL
+   • RedirectToActionResult        — 302 to another action
+   • RedirectToRouteResult         — 302 via route name
+   • LocalRedirectResult           — redirect only to local URL (safer)
+
+   HTTP status:
+   • OkResult / OkObjectResult     — 200
+   • CreatedResult                 — 201 (REST)
+   • NoContentResult               — 204
+   • BadRequestResult              — 400
+   • UnauthorizedResult            — 401
+   • ForbidResult                  — 403
+   • NotFoundResult                — 404
+   • StatusCodeResult              — any code
+
+   File:
+   • FileResult / FileContentResult / FileStreamResult / PhysicalFileResult
+
+   Example:
+     public IActionResult Details(int id)
+     {
+         var product = _repo.GetById(id);
+         if (product == null) return NotFound();
+         return View(product);
+     }
+
+================================================================================
+SECTION 3: ROUTING
+================================================================================
+
+Q9: What is routing in ASP.NET Core? Explain conventional vs attribute routing.
+────────────────────────────────────────────────────────────────────────────────
+A: Routing maps incoming HTTP URLs to controller actions.
+
+   CONVENTIONAL ROUTING — defined once in Program.cs with a template:
+     app.MapControllerRoute(
+         name: "default",
+         pattern: "{controller=Home}/{action=Index}/{id?}");
+
+     /Products/Details/5  →  ProductsController.Details(5)
+     /Home/Index          →  HomeController.Index()
+
+   ATTRIBUTE ROUTING — decorators on controllers/actions:
+     [Route("api/[controller]")]
+     public class ProductsController : Controller
+     {
+         [HttpGet("{id:int}")]          // GET /api/products/5
+         public IActionResult Get(int id) { ... }
+
+         [HttpPost]                     // POST /api/products
+         public IActionResult Create([FromBody] Product p) { ... }
+     }
+
+   When to use which:
+   • Conventional routing — traditional MVC websites with standard URL patterns.
+   • Attribute routing   — REST APIs or when you need fine-grained URL control.
+   • They can coexist in the same app (MVC uses conventional, API uses attribute).
+
+────────────────────────────────────────────────────────────────────────────────
+Q10: What are route constraints?
+──────────────────────────────────
+A: Route constraints restrict which values are matched by a route segment.
+
+   Inline constraint syntax: {parameter:constraint}
+
+   Common constraints:
+   • int         — {id:int}           only integers
+   • guid        — {id:guid}          only GUIDs
+   • bool        — {flag:bool}
+   • min(n)      — {age:min(18)}
+   • max(n)      — {age:max(100)}
+   • range(m,n)  — {id:range(1,999)}
+   • minlength(n)— {name:minlength(3)}
+   • maxlength(n)
+   • length(n)   — exact length
+   • alpha       — letters only
+   • regex(pat)  — {ssn:regex(^\\d{{3}}-\\d{{2}}-\\d{{4}}$)}
+
+   Example:
+     [HttpGet("{id:int:min(1)}")]
+     public IActionResult Details(int id) { ... }
+
+   Custom constraints implement IRouteConstraint.
+
+────────────────────────────────────────────────────────────────────────────────
+Q11: What is endpoint routing? How does it differ from older routing?
+──────────────────────────────────────────────────────────────────────
+A: Endpoint routing (introduced in ASP.NET Core 2.2, mandatory in 3.0+) separates
+   ROUTE MATCHING from ENDPOINT EXECUTION.
+
+   Pipeline stages:
+   1. UseRouting()   — matches the request to an endpoint (stores it in HttpContext).
+   2. UseAuthorization() — can check authorization on the matched endpoint.
+   3. UseEndpoints() / MapControllerRoute() — executes the matched endpoint.
+
+   This allows middleware between UseRouting and UseEndpoints to inspect the
+   matched endpoint (e.g., authorization policies, health checks).
+
+   Old routing (pre-2.2): matching and execution happened in one step; middleware
+   after routing couldn't see which endpoint was matched.
+
+================================================================================
+SECTION 4: CONTROLLERS
+================================================================================
+
+Q12: What is a Controller in ASP.NET Core MVC?
+────────────────────────────────────────────────
+A: A Controller is a class that:
+   • Inherits from Controller (or ControllerBase for APIs).
+   • Groups related action methods.
+   • Handles HTTP requests and returns IActionResult.
+
+   Naming convention: ProductsController → URL segment "Products".
+
+   Controller base class provides:
+   • View()           — render a view
+   • Json()           — return JSON
+   • Redirect()/RedirectToAction()
+   • Ok()/BadRequest()/NotFound() etc.
+   • HttpContext, Request, Response, RouteData
+   • ModelState
+   • TempData, ViewBag, ViewData
+   • User (ClaimsPrincipal)
+
+   Example:
+     public class ProductsController : Controller
+     {
+         private readonly IProductService _svc;
+         public ProductsController(IProductService svc) => _svc = svc;
+
+         public async Task<IActionResult> Index()
+             => View(await _svc.GetAllAsync());
+
+         [HttpPost]
+         [ValidateAntiForgeryToken]
+         public async Task<IActionResult> Create(ProductViewModel vm)
+         {
+             if (!ModelState.IsValid) return View(vm);
+             await _svc.CreateAsync(vm);
+             return RedirectToAction(nameof(Index));
+         }
+     }
+
+────────────────────────────────────────────────────────────────────────────────
+Q13: What is the difference between Controller and ControllerBase?
+───────────────────────────────────────────────────────────────────
+A: ControllerBase:
+   • Base class for all controllers.
+   • Provides HTTP-related helpers (Ok, BadRequest, NotFound, etc.).
+   • No view-related functionality.
+   • Used for Web API controllers ([ApiController]).
+
+   Controller:
+   • Inherits ControllerBase and adds VIEW support.
+   • Adds View(), PartialView(), Json(), ViewBag, ViewData, TempData.
+   • Used for MVC controllers that return HTML views.
+
+   Rule of thumb:
+   • Return HTML? → inherit Controller.
+   • Return JSON/data only? → inherit ControllerBase + [ApiController].
+
+────────────────────────────────────────────────────────────────────────────────
+Q14: What does [ApiController] attribute do?
+────────────────────────────────────────────
+A: [ApiController] enables API-specific behaviors:
+
+   1. Automatic model validation — returns 400 Bad Request automatically if
+      ModelState.IsValid is false (you don't need to check manually).
+   2. Binding source inference:
+      • Complex types → [FromBody] automatically.
+      • Primitive types → [FromRoute] or [FromQuery] automatically.
+   3. Problem Details response — errors use RFC 7807 ProblemDetails format.
+   4. Requires attribute routing (no conventional routing).
+   5. Multipart/form-data inference for IFormFile parameters.
+
+   Example without [ApiController]:
+     if (!ModelState.IsValid) return BadRequest(ModelState); // must do manually
+
+   Example with [ApiController]:
+     // 400 is returned automatically — no if-check needed
+
+================================================================================
+SECTION 5: VIEWS AND RAZOR
+================================================================================
+
+Q15: What is Razor syntax?
+───────────────────────────
+A: Razor is a templating engine that mixes C# code with HTML in .cshtml files.
+
+   Key syntax:
+   • @expression     — renders a C# value (HTML-encoded by default)
+   • @{ ... }        — C# code block (no output)
+   • @if / @foreach / @for / @while — control flow
+   • @model Type     — declares the model type for the view
+   • @Model          — accesses the model instance
+   • @Html.*         — HTML Helpers
+   • <tag asp-*>     — Tag Helpers (preferred modern approach)
+   • @using, @inject — directives
+   • @section Name { } — define a named section
+   • @RenderSection("Name") — render a section in the layout
+   • @RenderBody()   — renders child view content in the layout
+   • @await Html.PartialAsync("_Partial", model) — render partial view
+
+   Example:
+     @model List<Product>
+     <h1>Products</h1>
+     @foreach (var p in Model)
+     {
+         <p>@p.Name — @p.Price.ToString("C")</p>
+     }
+
+────────────────────────────────────────────────────────────────────────────────
+Q16: What is the difference between ViewBag, ViewData, and TempData?
+─────────────────────────────────────────────────────────────────────
+A: All three pass data from a Controller to a View (or across requests for TempData).
+
+   ViewData:
+   • Dictionary<string, object?> — key/value.
+   • Requires casting when reading in the view.
+   • Scope: current request only.
+     Controller: ViewData["Title"] = "Home";
+     View:       <h1>@ViewData["Title"]</h1>
+
+   ViewBag:
+   • Dynamic wrapper over ViewData — same underlying dictionary.
+   • No casting needed (dynamic type).
+   • Scope: current request only.
+     Controller: ViewBag.Title = "Home";
+     View:       <h1>@ViewBag.Title</h1>
+
+   TempData:
+   • Dictionary backed by Session or cookies.
+   • Survives one redirect (read once then deleted — "flash" data).
+   • Use Keep() or Peek() to retain beyond one read.
+   • Scope: current + next request.
+     Controller: TempData["Message"] = "Saved!";
+     After redirect view: @TempData["Message"]
+
+   Best practice: use strongly typed ViewModel passed to View() rather than
+   ViewBag/ViewData whenever possible — it's type-safe and testable.
+
+────────────────────────────────────────────────────────────────────────────────
+Q17: What are Tag Helpers?
+───────────────────────────
+A: Tag Helpers are server-side components that participate in rendering HTML
+   elements. They look like standard HTML attributes (lowercase, prefixed with
+   asp-) making Razor templates more HTML-friendly than @ syntax HTML Helpers.
+
+   Common Tag Helpers:
+   • <a asp-controller="Home" asp-action="Index">Home</a>
+   • <form asp-action="Create" method="post">
+   • <input asp-for="Name" class="form-control" />
+   • <span asp-validation-for="Name" class="text-danger"></span>
+   • <label asp-for="Name"></label>
+   • <select asp-for="CategoryId" asp-items="Model.Categories"></select>
+   • <img asp-append-version="true" src="~/img/logo.png" />
+   • <environment include="Development"><script src="..."></script></environment>
+   • <cache expires-after="@TimeSpan.FromMinutes(5)">...</cache>
+
+   Custom Tag Helper example:
+     [HtmlTargetElement("email")]
+     public class EmailTagHelper : TagHelper
+     {
+         public string Address { get; set; }
+         public override void Process(TagHelperContext ctx, TagHelperOutput out)
+         {
+             out.TagName = "a";
+             out.Attributes.SetAttribute("href", $"mailto:{Address}");
+             out.Content.SetContent(Address);
+         }
+     }
+
+────────────────────────────────────────────────────────────────────────────────
+Q18: What is a Layout in Razor and how does it work?
+─────────────────────────────────────────────────────
+A: A Layout (_Layout.cshtml) is a shared template that wraps all views — similar
+   to a master page in WebForms.
+
+   _Layout.cshtml:
+     <!DOCTYPE html>
+     <html>
+     <head><title>@ViewData["Title"]</title></head>
+     <body>
+       <nav>...</nav>
+       @RenderBody()           <!-- child view content goes here -->
+       @RenderSection("Scripts", required: false)
+     </body>
+     </html>
+
+   Child view (e.g., Index.cshtml):
+     @{
+         Layout = "_Layout";   // or set globally in _ViewStart.cshtml
+         ViewData["Title"] = "Home";
+     }
+     <h1>Hello</h1>
+     @section Scripts {
+         <script src="..."></script>
+     }
+
+   _ViewStart.cshtml (auto-executed before every view):
+     @{ Layout = "_Layout"; }
+
+   _ViewImports.cshtml (auto-imported into every view):
+     @using MyApp.Models
+     @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+────────────────────────────────────────────────────────────────────────────────
+Q19: What are Partial Views and View Components? How do they differ?
+─────────────────────────────────────────────────────────────────────
+A: PARTIAL VIEWS:
+   • Reusable Razor snippets (_ProductCard.cshtml).
+   • Rendered with: @await Html.PartialAsync("_ProductCard", model)
+     or: <partial name="_ProductCard" model="item" />
+   • Share the parent view's ViewData (unless you pass a model).
+   • Simple, synchronous or async.
+   • Best for simple, reusable HTML fragments with no separate logic.
+
+   VIEW COMPONENTS:
+   • More powerful — have their own class (like a mini-controller) and view.
+   • Support DI, async, full business logic.
+   • NOT part of the parent's request pipeline (independent invoke).
+   • Usage: @await Component.InvokeAsync("Cart")
+     or: <vc:cart />
+   • Class: inherits ViewComponent, has InvokeAsync() method.
+   • View location: Views/Shared/Components/Cart/Default.cshtml
+
+   Example:
+     public class CartViewComponent : ViewComponent
+     {
+         private readonly ICartService _cart;
+         public CartViewComponent(ICartService cart) => _cart = cart;
+         public async Task<IViewComponentResult> InvokeAsync()
+             => View(await _cart.GetItemsAsync(User));
+     }
+
+   Use partial views for simple rendering; view components when you need
+   constructor DI, business logic, or async data fetching.
+
+================================================================================
+SECTION 6: MODEL BINDING AND VALIDATION
+================================================================================
+
+Q20: What is Model Binding in ASP.NET Core?
+─────────────────────────────────────────────
+A: Model Binding automatically maps HTTP request data (route values, query string,
+   form body, JSON body, headers, files) to action method parameters or model
+   properties.
+
+   Binding sources (in default priority order for non-API controllers):
+   1. [FromRoute]   — route segment  /products/{id}
+   2. [FromQuery]   — query string   ?sort=asc
+   3. [FromForm]    — form POST data
+   4. [FromBody]    — request body (JSON/XML) — reads once
+   5. [FromHeader]  — HTTP header
+   6. [FromServices]— DI (resolved from DI container)
+
+   Example:
+     public IActionResult Details(
+         [FromRoute]  int id,
+         [FromQuery]  string? sort,
+         [FromHeader(Name = "X-Api-Key")] string apiKey)
+     { ... }
+
+   Complex type binding: Model Binder recursively binds all public settable
+   properties of a class from the request data.
+
+   Custom Model Binders implement IModelBinder and IModelBinderProvider.
+
+────────────────────────────────────────────────────────────────────────────────
+Q21: How does Model Validation work? What are Data Annotations?
+───────────────────────────────────────────────────────────────
+A: After model binding, ASP.NET Core runs validation. Results are stored in
+   ModelState. Check with ModelState.IsValid in your action.
+
+   DATA ANNOTATION ATTRIBUTES (System.ComponentModel.DataAnnotations):
+   • [Required]                    — must not be null/empty
+   • [StringLength(50, MinimumLength = 2)]
+   • [Range(1, 100)]
+   • [MinLength(3)] / [MaxLength(100)]
+   • [EmailAddress]
+   • [Phone]
+   • [Url]
+   • [CreditCard]
+   • [Compare("ConfirmPassword")]  — two fields must match
+   • [RegularExpression(@"^\d{5}$")]
+   • [Display(Name = "First Name")] — display name for labels/errors
+   • [DataType(DataType.Date)]     — rendering hint
+
+   Example model:
+     public class RegisterViewModel
+     {
+         [Required]
+         [StringLength(50, MinimumLength = 2)]
+         [Display(Name = "Full Name")]
+         public string Name { get; set; }
+
+         [Required]
+         [EmailAddress]
+         public string Email { get; set; }
+
+         [Required]
+         [DataType(DataType.Password)]
+         [StringLength(100, MinimumLength = 8)]
+         public string Password { get; set; }
+
+         [Compare("Password")]
+         [Display(Name = "Confirm Password")]
+         public string ConfirmPassword { get; set; }
+     }
+
+   CUSTOM VALIDATION:
+   Implement IValidatableObject on the model, or create a custom attribute
+   inheriting ValidationAttribute and override IsValid().
+
+     public class FutureDateAttribute : ValidationAttribute
+     {
+         protected override ValidationResult? IsValid(object? value, ValidationContext ctx)
+         {
+             if (value is DateTime dt && dt <= DateTime.Now)
+                 return new ValidationResult("Date must be in the future.");
+             return ValidationResult.Success;
+         }
+     }
+
+   FLUENT VALIDATION (popular library alternative):
+   • Separate validator classes keep models clean.
+   • More complex rules (cross-field, async, database checks).
+
+────────────────────────────────────────────────────────────────────────────────
+Q22: What is the [BindNever] and [BindRequired] attribute?
+───────────────────────────────────────────────────────────
+A: [BindNever]   — excludes a property from model binding (e.g., system-set fields
+   like CreatedAt or Id). Protects against over-posting attacks.
+
+   [BindRequired] — model binding MUST provide a value; if missing, a model state
+   error is added (stricter than [Required] which only checks for null/empty).
+
+   Over-posting / mass assignment attack: attacker sends extra fields in the POST
+   body that map to sensitive model properties (e.g., IsAdmin=true).
+
+   Defenses:
+   1. Use ViewModels (DTOs) that only expose the fields you expect.
+   2. [BindNever] on sensitive properties.
+   3. [Bind("Name,Email")] attribute on the action parameter — whitelist only.
+
+================================================================================
+SECTION 7: DEPENDENCY INJECTION
+================================================================================
+
+Q23: What is Dependency Injection (DI) and how does ASP.NET Core support it?
+──────────────────────────────────────────────────────────────────────────────
+A: Dependency Injection is a design pattern where a class's dependencies are
+   provided ("injected") from outside rather than created inside. Promotes loose
+   coupling, testability, and the Dependency Inversion Principle (SOLID).
+
+   ASP.NET Core has a built-in IoC (Inversion of Control) container.
+
+   REGISTERING SERVICES (Program.cs):
+     builder.Services.AddTransient<IEmailService, SmtpEmailService>();
+     builder.Services.AddScoped<IProductRepo, EfProductRepo>();
+     builder.Services.AddSingleton<ICacheService, MemoryCacheService>();
+
+   INJECTING (constructor injection — preferred):
+     public class OrderController : Controller
+     {
+         private readonly IOrderService _svc;
+         public OrderController(IOrderService svc) => _svc = svc;
+     }
+
+   INJECTING INTO VIEWS (rare — use sparingly):
+     @inject IUserService UserService
+     <p>Hello @UserService.GetCurrentUserName()</p>
+
+────────────────────────────────────────────────────────────────────────────────
+Q24: What are the DI service lifetimes?
+────────────────────────────────────────
+A: Three lifetimes control when a new instance is created:
+
+   TRANSIENT (AddTransient):
+   • New instance created EVERY TIME it is requested from the container.
+   • Safe for stateless, lightweight services.
+   • Most used for services with no state.
+
+   SCOPED (AddScoped):
+   • New instance created ONCE PER HTTP REQUEST (once per scope).
+   • Same instance is shared throughout the entire request pipeline.
+   • Use for DbContext (EF Core), unit-of-work patterns.
+   • Danger: injecting a scoped service into a singleton causes a "captive
+     dependency" bug — the scoped service lives as long as the singleton.
+
+   SINGLETON (AddSingleton):
+   • ONE instance for the entire application lifetime.
+   • Shared across all requests and all threads.
+   • Must be thread-safe.
+   • Use for expensive-to-create, stateless (or thread-safe stateful) services
+     like caches, configuration wrappers, HTTP clients.
+
+   Summary table:
+   ┌────────────────┬──────────────────────────────────────────────┐
+   │ Lifetime       │ When new instance is created                 │
+   ├────────────────┼──────────────────────────────────────────────┤
+   │ Transient      │ Every injection / every call to GetService() │
+   │ Scoped         │ Once per HTTP request                        │
+   │ Singleton      │ Once for the app lifetime                    │
+   └────────────────┴──────────────────────────────────────────────┘
+
+────────────────────────────────────────────────────────────────────────────────
+Q25: What is the Options Pattern in ASP.NET Core?
+──────────────────────────────────────────────────
+A: The Options Pattern is the recommended way to read typed configuration in
+   ASP.NET Core, using IOptions<T>, IOptionsSnapshot<T>, or IOptionsMonitor<T>.
+
+   appsettings.json:
+     { "EmailSettings": { "Host": "smtp.gmail.com", "Port": 587 } }
+
+   Settings class:
+     public class EmailSettings
+     {
+         public string Host { get; set; }
+         public int Port { get; set; }
+     }
+
+   Registration (Program.cs):
+     builder.Services.Configure<EmailSettings>(
+         builder.Configuration.GetSection("EmailSettings"));
+
+   Injection:
+     public class EmailService
+     {
+         private readonly EmailSettings _settings;
+         public EmailService(IOptions<EmailSettings> opts)
+             => _settings = opts.Value;
+     }
+
+   IOptions<T>         — Singleton, reads once at startup. No reloading.
+   IOptionsSnapshot<T> — Scoped, re-reads per request (picks up reloads).
+   IOptionsMonitor<T>  — Singleton, supports change notification callbacks.
+
+================================================================================
+SECTION 8: MIDDLEWARE
+================================================================================
+
+Q26: What is Middleware in ASP.NET Core?
+──────────────────────────────────────────
+A: Middleware is software assembled into a pipeline to handle HTTP requests and
+   responses. Each middleware:
+   1. Receives the request.
+   2. Optionally modifies it or short-circuits (stops further processing).
+   3. Calls the next middleware via next(context).
+   4. Optionally modifies the response on the way back.
+
+   Built-in middleware (order matters!):
+   app.UseExceptionHandler()
+   app.UseHsts()
+   app.UseHttpsRedirection()
+   app.UseStaticFiles()
+   app.UseRouting()
+   app.UseCors()
+   app.UseAuthentication()
+   app.UseAuthorization()
+   app.UseSession()
+   app.MapControllerRoute(...)
+
+   Custom middleware:
+     public class TimingMiddleware
+     {
+         private readonly RequestDelegate _next;
+         public TimingMiddleware(RequestDelegate next) => _next = next;
+
+         public async Task InvokeAsync(HttpContext context)
+         {
+             var sw = Stopwatch.StartNew();
+             await _next(context);
+             sw.Stop();
+             context.Response.Headers["X-Elapsed-Ms"] =
+                 sw.ElapsedMilliseconds.ToString();
+         }
+     }
+     // Register: app.UseMiddleware<TimingMiddleware>();
+
+────────────────────────────────────────────────────────────────────────────────
+Q27: Why does middleware ORDER matter?
+───────────────────────────────────────
+A: Each middleware wraps all subsequent middleware. The order determines:
+
+   • Exception handling must be FIRST so it can catch errors from everything below.
+   • Static files should be BEFORE routing to short-circuit without auth checks.
+   • UseRouting() must be BEFORE UseAuthorization() (auth needs the matched endpoint).
+   • UseAuthentication() must be BEFORE UseAuthorization().
+   • UseSession() must be AFTER UseRouting() but before MapControllerRoute().
+
+   Wrong order example:
+     app.UseAuthorization();  // ❌ placed before UseAuthentication
+     app.UseAuthentication(); // User identity not set yet when authorization runs
+
+   Correct:
+     app.UseAuthentication(); // ✅ sets ClaimsPrincipal
+     app.UseAuthorization();  // ✅ can now read identity
+
+────────────────────────────────────────────────────────────────────────────────
+Q28: What is the difference between Use, Run, and Map in middleware?
+─────────────────────────────────────────────────────────────────────
+A: app.Use()  — Adds middleware that CALLS NEXT (can modify request and response).
+               The standard way to add middleware.
+
+   app.Run()  — Terminal middleware. Does NOT call next. Short-circuits the pipeline.
+               Usually the last middleware.
+
+   app.Map()  — Branches the pipeline based on a URL path prefix.
+     app.Map("/admin", adminApp => {
+         adminApp.Use(...);
+         adminApp.Run(...);
+     });
+
+   app.MapWhen() — branches on any condition (HttpContext predicate).
+
+   Example:
+     app.Use(async (ctx, next) => {
+         // before
+         await next(ctx);
+         // after
+     });
+     app.Run(async ctx => {
+         await ctx.Response.WriteAsync("Final response");
+     });
+
+================================================================================
+SECTION 9: CONFIGURATION
+================================================================================
+
+Q29: How does configuration work in ASP.NET Core?
+───────────────────────────────────────────────────
+A: ASP.NET Core uses a layered configuration system. Sources are combined in order
+   (later sources override earlier ones):
+
+   Default sources (lowest to highest priority):
+   1. appsettings.json
+   2. appsettings.{Environment}.json  (e.g., appsettings.Development.json)
+   3. User Secrets (Development only)
+   4. Environment variables
+   5. Command-line arguments
+
+   Reading config:
+     // Simple value
+     string conn = builder.Configuration["ConnectionStrings:Default"];
+
+     // Section
+     var section = builder.Configuration.GetSection("EmailSettings");
+
+     // Typed binding
+     var settings = builder.Configuration
+                           .GetSection("EmailSettings")
+                           .Get<EmailSettings>();
+
+   Environment names: Development, Staging, Production.
+   Set via ASPNETCORE_ENVIRONMENT environment variable.
+
+────────────────────────────────────────────────────────────────────────────────
+Q30: What are User Secrets and when should you use them?
+──────────────────────────────────────────────────────────
+A: User Secrets store sensitive config values (API keys, passwords) OUTSIDE the
+   project directory so they never accidentally get committed to source control.
+
+   Stored at: %APPDATA%\Microsoft\UserSecrets\{userSecretsId}\secrets.json
+
+   Setup:
+     dotnet user-secrets init                          // adds UserSecretsId to .csproj
+     dotnet user-secrets set "Stripe:SecretKey" "sk_test_..."
+
+   Use for:
+   • Development-only secrets (API keys, DB passwords).
+   • Anything you don't want in appsettings.json checked into Git.
+
+   In production use:
+   • Environment variables
+   • Azure Key Vault / AWS Secrets Manager
+   • HashiCorp Vault
+   • Kubernetes secrets
+
+================================================================================
+SECTION 10: ENTITY FRAMEWORK CORE
+================================================================================
+
+Q31: What is Entity Framework Core?
+──────────────────────────────────────
+A: EF Core is Microsoft's official ORM (Object-Relational Mapper) for .NET.
+   It maps C# classes (entities) to database tables and lets you query/manipulate
+   data using LINQ without writing raw SQL.
+
+   Key concepts:
+   • DbContext       — unit of work + repository; represents the DB session.
+   • DbSet<T>        — represents a table; supports LINQ queries.
+   • Entities        — plain C# classes (POCOs) mapped to tables.
+   • Migrations      — code-based schema changes (version-controlled).
+   • Change Tracking — tracks entity state (Added, Modified, Deleted, Unchanged).
+
+   Example:
+     public class AppDbContext : DbContext
+     {
+         public AppDbContext(DbContextOptions<AppDbContext> options)
+             : base(options) { }
+
+         public DbSet<Product> Products { get; set; }
+         public DbSet<Category> Categories { get; set; }
+
+         protected override void OnModelCreating(ModelBuilder mb)
+         {
+             mb.Entity<Product>()
+               .HasOne(p => p.Category)
+               .WithMany(c => c.Products)
+               .HasForeignKey(p => p.CategoryId);
+         }
+     }
+
+────────────────────────────────────────────────────────────────────────────────
+Q32: What are EF Core Migrations?
+───────────────────────────────────
+A: Migrations are code-generated change scripts that keep the database schema
+   in sync with your C# model changes — like version control for the database.
+
+   Workflow:
+     dotnet ef migrations add AddProductTable    // generate migration
+     dotnet ef database update                   // apply to DB
+     dotnet ef migrations remove                 // remove last unapplied migration
+     dotnet ef database update 20240101_InitialCreate  // roll back to specific migration
+
+   Each migration creates two files:
+   • {timestamp}_{Name}.cs         — Up() and Down() methods.
+   • {timestamp}_{Name}.Designer.cs — snapshot metadata.
+
+   ModelSnapshot.cs — current full model snapshot (tracks state between migrations).
+
+   Production: apply via dotnet ef database update or generate SQL script:
+     dotnet ef migrations script --idempotent
+
+────────────────────────────────────────────────────────────────────────────────
+Q33: What is the difference between eager loading, lazy loading, and explicit loading?
+──────────────────────────────────────────────────────────────────────────────────────
+A: These are strategies for loading related entities in EF Core.
+
+   EAGER LOADING — load related data in the same query using Include():
+     var orders = context.Orders
+         .Include(o => o.Customer)
+         .Include(o => o.Items)
+             .ThenInclude(i => i.Product)
+         .ToList();
+     // One SQL JOIN query — data available immediately.
+
+   LAZY LOADING — related data loaded automatically on first access.
+     • Requires: Microsoft.EntityFrameworkCore.Proxies NuGet package.
+     • Navigation properties must be virtual.
+     • Can cause N+1 query problem (one query per related entity access).
+     • Configure: options.UseLazyLoadingProxies()
+
+   EXPLICIT LOADING — manually load related data on demand:
+     context.Entry(order).Reference(o => o.Customer).Load();
+     context.Entry(order).Collection(o => o.Items).Load();
+
+   Best practice:
+   • Default to eager loading with Include() — predictable queries.
+   • Avoid lazy loading unless you have a strong reason (N+1 risk).
+   • Use explicit loading for optional, conditional loads.
+
+────────────────────────────────────────────────────────────────────────────────
+Q34: What is the Repository Pattern and should you use it with EF Core?
+───────────────────────────────────────────────────────────────────────
+A: The Repository Pattern abstracts data access behind an interface, decoupling
+   the application from the ORM.
+
+   Interface:
+     public interface IProductRepository
+     {
+         Task<Product?> GetByIdAsync(int id);
+         Task<IEnumerable<Product>> GetAllAsync();
+         Task AddAsync(Product product);
+         void Remove(Product product);
+         Task SaveAsync();
+     }
+
+   Implementation wraps DbContext.
+
+   Arguments FOR:
+   • Easier to unit-test (mock the interface instead of DbContext).
+   • Single place to change data access technology.
+   • Encapsulates LINQ queries (avoid leaking query logic everywhere).
+
+   Arguments AGAINST:
+   • DbContext already implements Unit of Work and DbSet<T> is already a repository.
+   • Adding a layer often just wraps the DbContext 1:1 — leaky abstraction.
+   • LINQ queries in the repository lose composability.
+
+   Common middle ground:
+   • Use a thin repository for complex queries + raw SQL.
+   • Use DbContext directly for simple CRUD.
+   • Use a generic repository only if it genuinely reduces duplication.
+
+================================================================================
+SECTION 11: AUTHENTICATION AND AUTHORIZATION
+================================================================================
+
+Q35: What is the difference between Authentication and Authorization?
+──────────────────────────────────────────────────────────────────────
+A: Authentication — verifying WHO you are (identity). "Are you really Alice?"
+   Authorization  — verifying WHAT you can do (permissions). "Can Alice edit this?"
+
+   In ASP.NET Core:
+   • UseAuthentication() — reads the incoming credential (cookie, JWT) and sets
+     HttpContext.User (ClaimsPrincipal).
+   • UseAuthorization()  — checks if the authenticated user has permission to
+     access the resource.
+
+────────────────────────────────────────────────────────────────────────────────
+Q36: How do you implement Cookie Authentication in ASP.NET Core MVC?
+──────────────────────────────────────────────────────────────────────
+A: Cookie authentication is the standard for traditional MVC web apps.
+
+   1. Register in Program.cs:
+     builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+         .AddCookie(opts => {
+             opts.LoginPath    = "/Account/Login";
+             opts.LogoutPath   = "/Account/Logout";
+             opts.AccessDeniedPath = "/Account/AccessDenied";
+             opts.ExpireTimeSpan = TimeSpan.FromHours(1);
+             opts.SlidingExpiration = true;
+         });
+
+   2. Add middleware:
+     app.UseAuthentication();
+     app.UseAuthorization();
+
+   3. Login action:
+     var claims = new List<Claim> {
+         new(ClaimTypes.Name, user.Email),
+         new(ClaimTypes.Role, "Admin")
+     };
+     var identity  = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+     var principal = new ClaimsPrincipal(identity);
+     await HttpContext.SignInAsync(principal);
+
+   4. Logout:
+     await HttpContext.SignOutAsync();
+
+   5. Protect actions/controllers:
+     [Authorize]                    // must be authenticated
+     [Authorize(Roles = "Admin")]   // must be in Admin role
+
+────────────────────────────────────────────────────────────────────────────────
+Q37: What is JWT Authentication and how does it work in ASP.NET Core?
+──────────────────────────────────────────────────────────────────────
+A: JWT (JSON Web Token) is a compact, self-contained token for stateless auth —
+   typically used for APIs (not browser-cookie flows).
+
+   Structure: header.payload.signature (Base64Url encoded, dot-separated)
+   • Header:    {"alg":"HS256","typ":"JWT"}
+   • Payload:   claims (sub, email, roles, exp, etc.)
+   • Signature: HMAC of header+payload with a secret key — ensures integrity.
+
+   Setup:
+     builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+         .AddJwtBearer(opts => {
+             opts.TokenValidationParameters = new TokenValidationParameters {
+                 ValidateIssuer           = true,
+                 ValidIssuer              = config["Jwt:Issuer"],
+                 ValidateAudience         = true,
+                 ValidAudience            = config["Jwt:Audience"],
+                 ValidateLifetime         = true,
+                 ValidateIssuerSigningKey = true,
+                 IssuerSigningKey = new SymmetricSecurityKey(
+                     Encoding.UTF8.GetBytes(config["Jwt:Key"]))
+             };
+         });
+
+   Generate token:
+     var token = new JwtSecurityToken(
+         issuer:   "myapp",
+         audience: "myapp",
+         claims:   claims,
+         expires:  DateTime.UtcNow.AddHours(1),
+         signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha256));
+     return new JwtSecurityTokenHandler().WriteToken(token);
+
+   Client sends: Authorization: Bearer <token>
+
+────────────────────────────────────────────────────────────────────────────────
+Q38: What is ASP.NET Core Identity?
+────────────────────────────────────
+A: ASP.NET Core Identity is a membership system that adds full user management:
+   registration, login, password hashing, roles, claims, external logins (OAuth),
+   lockout, two-factor authentication.
+
+   Setup:
+     builder.Services.AddDefaultIdentity<IdentityUser>(opts => {
+         opts.Password.RequireDigit = true;
+         opts.Password.RequiredLength = 8;
+         opts.Lockout.MaxFailedAccessAttempts = 5;
+     })
+     .AddRoles<IdentityRole>()
+     .AddEntityFrameworkStores<AppDbContext>();
+
+   Key classes:
+   • UserManager<TUser>   — CRUD users, password hashing, claims
+   • SignInManager<TUser> — sign in/out, validate credentials
+   • RoleManager<TRole>   — CRUD roles
+
+   Provides scaffold-able UI pages for login/register/forgot password, etc.
+
+────────────────────────────────────────────────────────────────────────────────
+Q39: What is Policy-Based Authorization?
+─────────────────────────────────────────
+A: Policy-based authorization is more flexible than role-based auth. You define
+   named policies with requirements, then apply them to controllers/actions.
+
+   Define policies:
+     builder.Services.AddAuthorization(opts => {
+         opts.AddPolicy("AdminOnly",    p => p.RequireRole("Admin"));
+         opts.AddPolicy("MinAge18",     p => p.RequireClaim("Age", "18", "19", "20")); // etc.
+         opts.AddPolicy("PremiumUser",  p => p.RequireClaim("Subscription", "Premium"));
+         opts.AddPolicy("MustBeOwner",  p => p.AddRequirements(new OwnerRequirement()));
+     });
+
+   Apply:
+     [Authorize(Policy = "AdminOnly")]
+     public IActionResult AdminPanel() { ... }
+
+   Custom requirement:
+     public class OwnerRequirement : IAuthorizationRequirement { }
+
+     public class OwnerHandler : AuthorizationHandler<OwnerRequirement>
+     {
+         protected override Task HandleRequirementAsync(
+             AuthorizationHandlerContext ctx, OwnerRequirement req)
+         {
+             if (ctx.User.HasClaim("OwnerId", GetResourceOwnerId()))
+                 ctx.Succeed(req);
+             return Task.CompletedTask;
+         }
+     }
+
+================================================================================
+SECTION 12: FILTERS
+================================================================================
+
+Q40: What are Filters in ASP.NET Core MVC and what are the types?
+───────────────────────────────────────────────────────────────────
+A: Filters run code at specific points in the MVC request pipeline — before/after
+   action execution, around result execution, on exceptions, etc.
+
+   5 Filter Types (in execution order):
+   1. Authorization Filters — run first; short-circuit if unauthorized.
+      Implement IAuthorizationFilter / IAsyncAuthorizationFilter.
+
+   2. Resource Filters — run after auth, before model binding.
+      Good for caching or short-circuiting (IResourceFilter).
+
+   3. Action Filters — run before/after the action method.
+      Most commonly used. Implement IActionFilter / IAsyncActionFilter.
+      • OnActionExecuting  — before action
+      • OnActionExecuted   — after action (has access to result)
+
+   4. Exception Filters — handle unhandled exceptions from action/result.
+      Implement IExceptionFilter / IAsyncExceptionFilter.
+
+   5. Result Filters — run before/after the IActionResult executes.
+      Implement IResultFilter / IAsyncResultFilter.
+
+   Scope:
+   • Global    — app.MapControllerRoute + services.AddControllers(o => o.Filters.Add(...))
+   • Controller — [ServiceFilter] or [TypeFilter] or custom attribute on class
+   • Action    — attribute on method
+
+   Example — logging action filter:
+     public class LogActionFilter : IActionFilter
+     {
+         public void OnActionExecuting(ActionExecutingContext ctx)
+             => Console.WriteLine($"Executing {ctx.ActionDescriptor.DisplayName}");
+
+         public void OnActionExecuted(ActionExecutedContext ctx)
+             => Console.WriteLine($"Executed {ctx.ActionDescriptor.DisplayName}");
+     }
+
+────────────────────────────────────────────────────────────────────────────────
+Q41: What is the difference between a Filter and Middleware?
+─────────────────────────────────────────────────────────────
+A: Both intercept requests but operate at different levels.
+
+   MIDDLEWARE:
+   • Operates on the raw HttpContext — runs before MVC.
+   • No access to MVC concepts (ActionContext, ModelState, route values).
+   • Runs for EVERY request (static files, auth endpoints, etc.).
+   • Use for cross-cutting concerns not specific to MVC: logging, compression,
+     CORS, auth token reading, rate limiting.
+
+   FILTER:
+   • Operates within the MVC pipeline — runs after routing.
+   • Has access to ActionContext, ActionDescriptor, ModelState, ActionResult.
+   • Only runs for requests matched to an MVC action.
+   • Use for: validation, caching action results, logging MVC-specific data,
+     exception handling within MVC, audit trails.
+
+================================================================================
+SECTION 13: SESSION, COOKIES, AND STATE MANAGEMENT
+================================================================================
+
+Q42: What are the options for state management in ASP.NET Core?
+────────────────────────────────────────────────────────────────
+A: HTTP is stateless by nature. ASP.NET Core provides several options:
+
+   1. COOKIES:
+      • Small key-value data stored in the browser.
+      • Sent with every request automatically.
+      • Use for: authentication, preferences, non-sensitive data.
+      Response.Cookies.Append("theme", "dark", new CookieOptions {
+          Expires   = DateTimeOffset.UtcNow.AddDays(30),
+          HttpOnly  = true,    // not accessible from JS
+          Secure    = true,    // HTTPS only
+          SameSite  = SameSiteMode.Strict
+      });
+      string? theme = Request.Cookies["theme"];
+
+   2. SESSION:
+      • Server-side storage; browser holds only a session ID cookie.
+      • Stored in memory by default (or Redis/SQL for distributed).
+      • Setup: builder.Services.AddSession(); app.UseSession();
+      HttpContext.Session.SetString("CartId", cartId);
+      string? id = HttpContext.Session.GetString("CartId");
+
+   3. TEMPDATA — see Q16 (persists across one redirect).
+
+   4. QUERY STRING — data in URL (?key=value). Bookmarkable, no server state.
+
+   5. HIDDEN FIELDS — data in HTML form. Safe for small amounts.
+
+   6. CACHE — IMemoryCache / IDistributedCache for shared, short-lived data.
+
+   7. DATABASE — permanent persistence.
+
+   8. LOCAL STORAGE / SESSION STORAGE — browser JS APIs (front-end only).
+
+================================================================================
+SECTION 14: AREAS
+================================================================================
+
+Q43: What are Areas in ASP.NET Core MVC?
+──────────────────────────────────────────
+A: Areas are a way to partition a large MVC application into smaller functional
+   groups, each with its own Controllers, Views, and Models folder.
+
+   Common use case: Admin area vs. Public area of a website.
+
+   Folder structure:
+     Areas/
+       Admin/
+         Controllers/UsersController.cs
+         Views/Users/Index.cshtml
+       Shop/
+         Controllers/ProductsController.cs
+         Views/Products/Index.cshtml
+
+   Controller:
+     [Area("Admin")]
+     public class UsersController : Controller { ... }
+
+   Route configuration:
+     app.MapControllerRoute(
+         name: "areas",
+         pattern: "{area:exists}/{controller=Home}/{action=Index}/{id?}");
+
+   Generate area links:
+     <a asp-area="Admin" asp-controller="Users" asp-action="Index">Users</a>
+
+================================================================================
+SECTION 15: CACHING
+================================================================================
+
+Q44: What are the caching options in ASP.NET Core?
+────────────────────────────────────────────────────
+A: Four main caching mechanisms:
+
+   1. IN-MEMORY CACHE (IMemoryCache):
+      • Stored in the server's memory. Fast. Single-server only.
+      builder.Services.AddMemoryCache();
+      // Inject and use:
+      if (!_cache.TryGetValue("products", out List<Product> products))
+      {
+          products = await _repo.GetAllAsync();
+          _cache.Set("products", products, TimeSpan.FromMinutes(10));
+      }
+
+   2. DISTRIBUTED CACHE (IDistributedCache):
+      • Works across multiple servers. Backed by Redis or SQL Server.
+      builder.Services.AddStackExchangeRedisCache(opts => {
+          opts.Configuration = "localhost:6379";
+      });
+
+   3. RESPONSE CACHING (HTTP-level):
+      • Caches entire HTTP responses. Middleware-based.
+      builder.Services.AddResponseCaching();
+      app.UseResponseCaching();
+      [ResponseCache(Duration = 60, VaryByQueryKeys = new[] {"page"})]
+      public IActionResult Products() { ... }
+
+   4. OUTPUT CACHING (.NET 7+):
+      • Server-side output caching that supersedes response caching.
+      builder.Services.AddOutputCache();
+      app.UseOutputCache();
+      [OutputCache(Duration = 60)]
+      public IActionResult Products() { ... }
+
+   5. TAG HELPER CACHE (view-level):
+      <cache expires-after="@TimeSpan.FromMinutes(5)">
+          @await Component.InvokeAsync("PopularProducts")
+      </cache>
+
+================================================================================
+SECTION 16: LOGGING
+================================================================================
+
+Q45: How does logging work in ASP.NET Core?
+─────────────────────────────────────────────
+A: ASP.NET Core has a built-in, extensible logging framework via ILogger<T>.
+
+   INJECT AND USE:
+     public class ProductsController : Controller
+     {
+         private readonly ILogger<ProductsController> _logger;
+         public ProductsController(ILogger<ProductsController> logger)
+             => _logger = logger;
+
+         public IActionResult Index()
+         {
+             _logger.LogInformation("Products page visited at {Time}", DateTime.UtcNow);
+             return View();
+         }
+     }
+
+   LOG LEVELS (lowest to highest severity):
+   Trace → Debug → Information → Warning → Error → Critical → None
+
+   CONFIGURE minimum level in appsettings.json:
+     "Logging": {
+       "LogLevel": {
+         "Default":     "Information",
+         "Microsoft":   "Warning",
+         "MyApp.Data":  "Debug"
+       }
+     }
+
+   PROVIDERS (outputs):
+   • Console (built-in)
+   • Debug (Visual Studio Output window)
+   • EventSource / EventLog (Windows)
+   • Serilog (popular 3rd party — structured logging, sinks for files, Seq, ELK)
+   • NLog
+   • Application Insights (Azure)
+
+   STRUCTURED LOGGING (preferred):
+     _logger.LogWarning("Order {OrderId} failed for user {UserId}", orderId, userId);
+     // Stores as structured properties, not just a string
+
+================================================================================
+SECTION 17: SECURITY
+================================================================================
+
+Q46: What is CSRF and how does ASP.NET Core protect against it?
+───────────────────────────────────────────────────────────────
+A: CSRF (Cross-Site Request Forgery) tricks an authenticated user's browser into
+   sending malicious requests to your app (e.g., forging a POST to /Account/Delete).
+
+   ASP.NET Core protection — Antiforgery tokens:
+   1. Server generates a unique token embedded in a hidden form field.
+   2. The same token is stored in a cookie.
+   3. On POST, both tokens must match. A cross-site request can't read your cookie.
+
+   In Razor forms (automatic with Tag Helpers):
+     <form asp-action="Delete" method="post">
+         <!-- asp-* tag helper auto-injects __RequestVerificationToken hidden field -->
+         <button type="submit">Delete</button>
+     </form>
+
+   Action:
+     [HttpPost]
+     [ValidateAntiForgeryToken]   // ← validates the token
+     public IActionResult Delete(int id) { ... }
+
+   Global enforcement (recommended):
+     builder.Services.AddControllersWithViews(opts =>
+         opts.Filters.Add(new AutoValidateAntiforgeryTokenAttribute()));
+
+   AJAX CSRF:
+     // Include token in request header:
+     headers: { "RequestVerificationToken": token }
+     // Validate with [ValidateAntiForgeryToken]
+
+────────────────────────────────────────────────────────────────────────────────
+Q47: What is XSS and how does Razor protect against it?
+───────────────────────────────────────────────────────
+A: XSS (Cross-Site Scripting) — attacker injects malicious JavaScript into pages
+   viewed by other users.
+
+   Razor auto-encodes:
+   • @expression automatically HTML-encodes output:
+     @Model.UserInput  →  &lt;script&gt;alert(1)&lt;/script&gt;   // SAFE
+
+   Raw (unencoded) output — use only for trusted HTML:
+   • @Html.Raw(model.HtmlContent)   ← DANGEROUS if content is user-supplied
+
+   Additional protections:
+   • Content Security Policy (CSP) header — restricts which scripts can run.
+   • HttpOnly cookies — JS cannot read auth cookies.
+   • Use a sanitizer library (HtmlSanitizer) when you must display user HTML.
+
+────────────────────────────────────────────────────────────────────────────────
+Q48: How do you prevent SQL Injection with EF Core?
+─────────────────────────────────────────────────────
+A: EF Core uses parameterized queries by default — LINQ queries never concatenate
+   user input into SQL, so SQL injection is not possible with standard LINQ.
+
+   SAFE (parameterized):
+     var product = context.Products
+         .Where(p => p.Name == userInput)   // ← parameter, never injected
+         .FirstOrDefault();
+
+   SAFE raw SQL with parameters:
+     var result = context.Products
+         .FromSqlRaw("SELECT * FROM Products WHERE Name = {0}", userInput)
+         .ToList();
+     // Or: FromSqlInterpolated($"SELECT * FROM Products WHERE Name = {userInput}")
+
+   DANGEROUS — never do:
+     string sql = $"SELECT * FROM Products WHERE Name = '{userInput}'"; // ❌ injection risk
+     context.Products.FromSqlRaw(sql).ToList();
+
+   Additional rules:
+   • Never concatenate user input into SQL strings.
+   • Use [Column] / Fluent API — don't trust user-controlled column names.
+   • Principle of least privilege on the DB user account.
+
+================================================================================
+SECTION 18: WEB API WITHIN ASP.NET CORE MVC
+================================================================================
+
+Q49: What is the difference between ASP.NET Core MVC and Web API?
+───────────────────────────────────────────────────────────────────
+A: In ASP.NET Core, MVC and Web API are unified — the same framework handles both.
+
+   MVC (returns Views):
+   • Controller inherits Controller.
+   • Returns HTML via ViewResult.
+   • Designed for browser clients.
+
+   Web API (returns data):
+   • Controller inherits ControllerBase + [ApiController].
+   • Returns JSON/XML via ObjectResult, OkObjectResult, etc.
+   • Designed for programmatic clients (SPAs, mobile apps, other services).
+
+   Both use the same routing, DI, filters, and middleware pipeline.
+
+   In practice you often have both in one project:
+     • /Products          → MVC controller → HTML views
+     • /api/products      → API controller → JSON
+
+────────────────────────────────────────────────────────────────────────────────
+Q50: What is Content Negotiation?
+───────────────────────────────────
+A: Content negotiation allows a client to specify the preferred response format
+   via the Accept HTTP header, and the server responds in that format.
+
+   Client:  Accept: application/json
+            Accept: application/xml
+            Accept: text/html
+
+   Server (ASP.NET Core):
+   • By default only supports JSON (via System.Text.Json).
+   • Add XML: builder.Services.AddControllers().AddXmlSerializerFormatters();
+   • Respects the Accept header and picks the best matching formatter.
+
+   Disable respect for Accept (return JSON always):
+     builder.Services.AddControllers(opts =>
+         opts.RespectBrowserAcceptHeader = false);
+
+================================================================================
+SECTION 19: BACKGROUND SERVICES AND HOSTED SERVICES
+================================================================================
+
+Q51: What is IHostedService and BackgroundService?
+────────────────────────────────────────────────────
+A: IHostedService — interface for code that runs alongside the web app's lifetime.
+
+   StartAsync(CancellationToken) — called when app starts.
+   StopAsync(CancellationToken)  — called when app stops (graceful shutdown).
+
+   BackgroundService (abstract class) — simplifies IHostedService for long-running
+   background tasks. Override ExecuteAsync(CancellationToken):
+
+     public class QueueProcessor : BackgroundService
+     {
+         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+         {
+             while (!stoppingToken.IsCancellationRequested)
+             {
+                 var job = await _queue.DequeueAsync(stoppingToken);
+                 await ProcessJobAsync(job);
+             }
+         }
+     }
+
+   Register:
+     builder.Services.AddHostedService<QueueProcessor>();
+
+   Use cases:
+   • Background job queues
+   • Periodic tasks (polling, cleanup, sending emails)
+   • Cache warming at startup
+   • Message queue consumers (RabbitMQ, Azure Service Bus)
+
+================================================================================
+SECTION 20: TESTING
+================================================================================
+
+Q52: How do you unit test an ASP.NET Core MVC controller?
+──────────────────────────────────────────────────────────
+A: Controllers should be thin — delegate to services that you mock in tests.
+
+   Using xUnit + Moq:
+     public class ProductsControllerTests
+     {
+         [Fact]
+         public async Task Index_ReturnsViewWithProducts()
+         {
+             // Arrange
+             var mockSvc = new Mock<IProductService>();
+             mockSvc.Setup(s => s.GetAllAsync())
+                    .ReturnsAsync(new List<Product> { new() { Name = "Widget" } });
+
+             var controller = new ProductsController(mockSvc.Object);
+
+             // Act
+             var result = await controller.Index();
+
+             // Assert
+             var viewResult = Assert.IsType<ViewResult>(result);
+             var model = Assert.IsAssignableFrom<IEnumerable<Product>>(viewResult.Model);
+             Assert.Single(model);
+         }
+
+         [Fact]
+         public async Task Create_InvalidModel_ReturnsView()
+         {
+             var controller = new ProductsController(Mock.Of<IProductService>());
+             controller.ModelState.AddModelError("Name", "Required");
+
+             var result = await controller.Create(new ProductViewModel());
+
+             Assert.IsType<ViewResult>(result);
+         }
+     }
+
+────────────────────────────────────────────────────────────────────────────────
+Q53: What is integration testing with WebApplicationFactory?
+─────────────────────────────────────────────────────────────
+A: WebApplicationFactory<TProgram> spins up the full ASP.NET Core app in memory
+   for integration tests — real middleware, routing, DI, and optionally a real DB.
+
+     public class ProductsIntegrationTests : IClassFixture<WebApplicationFactory<Program>>
+     {
+         private readonly HttpClient _client;
+
+         public ProductsIntegrationTests(WebApplicationFactory<Program> factory)
+         {
+             _client = factory.WithWebHostBuilder(builder =>
+             {
+                 builder.ConfigureServices(services =>
+                 {
+                     // Replace DB with in-memory for tests
+                     services.RemoveAll<DbContextOptions<AppDbContext>>();
+                     services.AddDbContext<AppDbContext>(opts =>
+                         opts.UseInMemoryDatabase("TestDb"));
+                 });
+             }).CreateClient();
+         }
+
+         [Fact]
+         public async Task GetProducts_Returns200()
+         {
+             var response = await _client.GetAsync("/api/products");
+             response.EnsureSuccessStatusCode();
+         }
+     }
+
+================================================================================
+SECTION 21: PERFORMANCE AND BEST PRACTICES
+================================================================================
+
+Q54: What are common performance best practices in ASP.NET Core MVC?
+─────────────────────────────────────────────────────────────────────
+A:
+   ASYNC/AWAIT EVERYWHERE:
+   • Use async action methods (Task<IActionResult>).
+   • Use async EF Core methods (ToListAsync, FirstOrDefaultAsync).
+   • Never block async code with .Result or .Wait() — causes deadlocks.
+
+   CACHING:
+   • Cache expensive DB queries with IMemoryCache or IDistributedCache.
+   • Use [OutputCache] or [ResponseCache] for entire response caching.
+
+   EF CORE QUERY OPTIMIZATION:
+   • Use .AsNoTracking() for read-only queries — skips change tracking overhead.
+   • Select only needed columns with .Select() — avoid SELECT *.
+   • Paginate results — never load thousands of rows.
+   • Use .AsSplitQuery() for queries with multiple Include() to avoid cartesian explosion.
+   • Index foreign keys and commonly queried columns in DB.
+
+   STATIC FILES:
+   • Serve from CDN in production.
+   • Use cache-busting (asp-append-version="true").
+
+   BUNDLE AND MINIFY CSS/JS:
+   • Use LibMan or npm + webpack/esbuild.
+   • Reduces HTTP requests and payload size.
+
+   RESPONSE COMPRESSION:
+     builder.Services.AddResponseCompression(opts => {
+         opts.EnableForHttps = true;
+     });
+     app.UseResponseCompression();
+
+   CONNECTION POOLING:
+   • EF Core uses ADO.NET connection pooling by default — do not create DbConnection
+     manually unless necessary.
+
+   HTTP/2:
+   • Enable on Kestrel — multiplexing reduces latency for multiple resources.
+
+   MINIMIZE ALLOCATIONS:
+   • Use Span<T> and ArrayPool<T> in hot paths.
+   • Prefer struct-based enumerables in tight loops.
+   • Use ObjectPool<T> for expensive-to-create objects.
+
+────────────────────────────────────────────────────────────────────────────────
+Q55: What is the difference between synchronous and asynchronous action methods?
+─────────────────────────────────────────────────────────────────────────────────
+A: SYNCHRONOUS:
+     public IActionResult Index()
+     {
+         var products = _repo.GetAll();  // blocks the thread
+         return View(products);
+     }
+   The thread is BLOCKED waiting for I/O (DB, HTTP call, file).
+   Under high load: thread pool exhaustion → requests queue up → app becomes slow.
+
+   ASYNCHRONOUS:
+     public async Task<IActionResult> Index()
+     {
+         var products = await _repo.GetAllAsync();  // thread released during I/O
+         return View(products);
+     }
+   Thread is RELEASED to the pool while awaiting I/O.
+   Same threads can handle more concurrent requests.
+   No performance benefit for pure CPU work — only for I/O-bound operations.
+
+   GOLDEN RULE: make every action that touches I/O (DB, HTTP, file) async.
+
+================================================================================
+SECTION 22: ADVANCED TOPICS
+================================================================================
+
+Q56: What is Health Checks in ASP.NET Core?
+─────────────────────────────────────────────
+A: Health checks expose an endpoint (typically /health) that reports the app's
+   readiness/liveness for load balancers, orchestrators (Kubernetes), and monitors.
+
+   Setup:
+     builder.Services.AddHealthChecks()
+         .AddSqlServer(connectionString)
+         .AddRedis(redisConnection)
+         .AddCheck<CustomHealthCheck>("custom");
+
+     app.MapHealthChecks("/health");
+     app.MapHealthChecks("/health/ready",
+         new HealthCheckOptions { Predicate = hc => hc.Tags.Contains("ready") });
+
+   Custom check:
+     public class CustomHealthCheck : IHealthCheck
+     {
+         public Task<HealthCheckResult> CheckHealthAsync(
+             HealthCheckContext ctx, CancellationToken ct)
+         {
+             bool healthy = IsServiceAvailable();
+             return Task.FromResult(healthy
+                 ? HealthCheckResult.Healthy("Service is up")
+                 : HealthCheckResult.Unhealthy("Service is down"));
+         }
+     }
+
+────────────────────────────────────────────────────────────────────────────────
+Q57: What is Minimal APIs and how do they differ from MVC?
+───────────────────────────────────────────────────────────
+A: Minimal APIs (introduced in .NET 6) define HTTP endpoints inline in Program.cs
+   with minimal boilerplate — no controllers, no attributes.
+
+     app.MapGet("/products", async (AppDbContext db) =>
+         await db.Products.ToListAsync());
+
+     app.MapPost("/products", async (Product product, AppDbContext db) => {
+         db.Products.Add(product);
+         await db.SaveChangesAsync();
+         return Results.Created($"/products/{product.Id}", product);
+     });
+
+   When to use:
+   • Minimal APIs — small services, microservices, simple CRUD APIs, less ceremony.
+   • MVC/ControllerBase — large apps with many endpoints, filters, complex routing,
+     teams used to controller conventions.
+   • They can coexist in the same app.
+
+────────────────────────────────────────────────────────────────────────────────
+Q58: What is CORS and how do you configure it?
+────────────────────────────────────────────────
+A: CORS (Cross-Origin Resource Sharing) is a browser security mechanism that
+   blocks JavaScript on one origin from making requests to a different origin
+   unless the server explicitly allows it via response headers.
+
+   Same origin = same scheme + host + port.
+
+   ASP.NET Core CORS setup:
+     builder.Services.AddCors(opts => {
+         opts.AddPolicy("AllowReactApp", policy => policy
+             .WithOrigins("https://myapp.com", "http://localhost:3000")
+             .WithMethods("GET", "POST", "PUT", "DELETE")
+             .WithHeaders("Content-Type", "Authorization")
+             .AllowCredentials());
+
+         opts.AddDefaultPolicy(policy => policy.AllowAnyOrigin()
+             .AllowAnyMethod().AllowAnyHeader());
+     });
+
+     app.UseCors("AllowReactApp");  // before UseRouting or after, per docs
+
+   Apply to specific controllers/actions:
+     [EnableCors("AllowReactApp")]
+     public class ProductsController : Controller { ... }
+
+     [DisableCors]
+     public IActionResult Sensitive() { ... }
+
+   Note: AllowAnyOrigin() cannot be combined with AllowCredentials().
+
+────────────────────────────────────────────────────────────────────────────────
+Q59: What is SignalR?
+──────────────────────
+A: SignalR is an ASP.NET Core library for real-time, bidirectional communication
+   between server and clients (browser, mobile, desktop).
+
+   Protocols (negotiated automatically, best available):
+   • WebSockets (preferred — full duplex)
+   • Server-Sent Events
+   • Long Polling (fallback)
+
+   Hub — the server-side component clients connect to:
+     public class ChatHub : Hub
+     {
+         public async Task SendMessage(string user, string message)
+             => await Clients.All.SendAsync("ReceiveMessage", user, message);
+
+         public async Task JoinGroup(string group)
+             => await Groups.AddToGroupAsync(Context.ConnectionId, group);
+     }
+
+   Register:
+     builder.Services.AddSignalR();
+     app.MapHub<ChatHub>("/chatHub");
+
+   JavaScript client:
+     const connection = new signalR.HubConnectionBuilder()
+         .withUrl("/chatHub").build();
+     connection.on("ReceiveMessage", (user, msg) => console.log(user, msg));
+     await connection.start();
+     await connection.invoke("SendMessage", "Alice", "Hello!");
+
+   Use cases: chat, live dashboards, collaborative editing, notifications,
+   real-time game state.
+
+────────────────────────────────────────────────────────────────────────────────
+Q60: What is Rate Limiting in .NET 7+?
+───────────────────────────────────────
+A: Rate limiting controls how many requests a client can make in a time window —
+   protects against DoS attacks and API abuse.
+
+   Built-in in .NET 7 (System.Threading.RateLimiting + ASP.NET Core middleware):
+
+     builder.Services.AddRateLimiter(opts => {
+         opts.AddFixedWindowLimiter("fixed", options => {
+             options.Window            = TimeSpan.FromSeconds(10);
+             options.PermitLimit       = 10;
+             options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+             options.QueueLimit        = 2;
+         });
+
+         opts.AddSlidingWindowLimiter("sliding", options => {
+             options.Window            = TimeSpan.FromSeconds(60);
+             options.PermitLimit       = 100;
+             options.SegmentsPerWindow = 6;
+         });
+
+         opts.AddTokenBucketLimiter("token", options => {
+             options.TokenLimit             = 20;
+             options.ReplenishmentPeriod    = TimeSpan.FromSeconds(1);
+             options.TokensPerPeriod        = 5;
+         });
+
+         opts.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+     });
+
+     app.UseRateLimiter();
+
+   Apply to endpoint:
+     app.MapControllerRoute(...).RequireRateLimiting("fixed");
+
+   Or per controller/action:
+     [EnableRateLimiting("fixed")]
+     public IActionResult Search() { ... }
+
+================================================================================
+QUICK-REFERENCE CHEAT SHEET
+================================================================================
+
+PROGRAM.CS SERVICE REGISTRATION ORDER (typical):
+  AddDbContext → AddIdentity → AddAuthentication → AddAuthorization →
+  AddMemoryCache → AddSession → AddControllersWithViews → AddSignalR
+
+MIDDLEWARE ORDER (critical — wrong order = bugs):
+  UseExceptionHandler / UseDeveloperExceptionPage
+  UseHsts
+  UseHttpsRedirection
+  UseStaticFiles
+  UseCors
+  UseRouting
+  UseAuthentication       ← must be before UseAuthorization
+  UseAuthorization
+  UseSession
+  MapControllerRoute / MapHub / MapRazorPages / MapHealthChecks
+
+HTTP METHOD → ACTION RESULT MAP:
+  GET    → View / Ok / File / NotFound
+  POST   → RedirectToAction (PRG pattern) / BadRequest / Created
+  PUT    → Ok / NoContent / NotFound / BadRequest
+  DELETE → NoContent / NotFound
+  PATCH  → Ok / NoContent
+
+PRG PATTERN (Post-Redirect-Get):
+  [HttpPost] → process → RedirectToAction("Index")
+  Prevents duplicate form submission on browser refresh.
+
+EF CORE QUERY PERFORMANCE TIPS:
+  Read-only:  .AsNoTracking()
+  Paging:     .Skip((page-1)*size).Take(size)
+  Projection: .Select(p => new { p.Id, p.Name })
+  Split join: .AsSplitQuery()
+  Exists:     .AnyAsync() rather than .CountAsync() > 0
+
+DI LIFETIME QUICK RULE:
+  Stateless utility service → Transient
+  Anything per-request (DbContext) → Scoped
+  Shared, thread-safe config/cache → Singleton
+  NEVER inject Scoped into Singleton (captive dependency)
+
+SECURITY CHECKLIST:
+  ✓ HTTPS enforced (UseHttpsRedirection + HSTS)
+  ✓ Antiforgery tokens on all POST forms
+  ✓ [Authorize] on all protected actions
+  ✓ Input validated server-side (never trust client)
+  ✓ EF Core parameterized queries (no raw string concatenation)
+  ✓ Sensitive config in User Secrets / env vars (not appsettings.json)
+  ✓ HttpOnly + Secure + SameSite on auth cookies
+  ✓ Content Security Policy header
+  ✓ CORS policy locked down (not AllowAnyOrigin in prod)
+
+================================================================================
+END OF FILE — .NET CORE WEB MVC INTERVIEW QUESTIONS
+================================================================================
