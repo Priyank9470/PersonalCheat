@@ -1,0 +1,2620 @@
+================================================================================
+         JQUERY INTERVIEW QUESTIONS — BASIC TO ADVANCED
+         (With examples and answers)
+================================================================================
+
+HOW TO USE THIS FILE:
+  - Read each Q, think of your own answer first, then check the A.
+  - Sections flow from fundamentals to advanced production topics.
+  - Sections: Fundamentals → Selectors → DOM Manipulation →
+              Traversing the DOM → Events → Effects & Animations →
+              Ajax → Deferred & Promises → Utilities →
+              Plugins & Extensibility → Performance & Best Practices →
+              jQuery vs Modern JavaScript / Frameworks → Advanced/Tricky Topics
+
+================================================================================
+SECTION 1: JQUERY FUNDAMENTALS
+================================================================================
+
+Q1: What is jQuery, and why was it created?
+────────────────────────────────────────────
+A: jQuery is a fast, lightweight JavaScript library created by John Resig, first
+   released in January 2006. Its stated goal was "write less, do more" — it wraps
+   verbose, inconsistent DOM APIs in a small, chainable API.
+
+   Historical context (why it mattered so much circa 2006-2012):
+   • Cross-browser DOM APIs were wildly inconsistent. IE used attachEvent()/
+     detachEvent() while other browsers used addEventListener()/removeEventListener().
+   • IE used event.srcElement instead of event.target, and window.event instead of
+     a passed event parameter; there was no standard preventDefault() (IE used
+     event.returnValue = false).
+   • document.querySelectorAll() did not exist before IE8, so selecting elements by
+     CSS selector required manual DOM walking or non-standard APIs.
+   • XMLHttpRequest instantiation differed between IE (ActiveXObject) and everyone
+     else, and Ajax callback handling had no unified success/error/complete model.
+   • CSS property access (getComputedStyle vs currentStyle), opacity (filter:alpha
+     in old IE vs opacity in others), and animation all needed browser branching.
+
+   jQuery abstracted all of this behind one consistent API: selection, DOM
+   manipulation, event handling, Ajax, and animation. It also introduced the now-
+   ubiquitous "chainable" API style (methods return the jQuery object so calls can
+   be strung together) and the CSS-selector-based Sizzle selector engine.
+
+   Today, most of the underlying browser inconsistencies jQuery solved are gone
+   (evergreen browsers, no old IE), which is why jQuery's popularity has declined
+   in new projects — but it remains hugely important in legacy code, WordPress,
+   and countless plugins (DataTables, Select2, etc.).
+
+────────────────────────────────────────────────────────────────────────────────
+Q2: What is the relationship between $ and jQuery? Are they the same thing?
+────────────────────────────────────────────────────────────────────────────
+A: $ is simply an alias (a shorthand global variable) for the jQuery function/object.
+   Internally, the library does something equivalent to:
+
+     window.jQuery = window.$ = function(selector, context) { ... };
+
+   So $('#id') and jQuery('#id') are 100% identical calls. The $ alias exists purely
+   for brevity, because $ is a valid (if unusual) JavaScript identifier character
+   and was already a popular convention in libraries like Prototype.js.
+
+   The alias becomes important when multiple libraries also try to claim the global
+   $ symbol (e.g. Prototype.js, MooTools, or another copy of jQuery). In that case
+   you must resolve the conflict — see jQuery.noConflict() below. Well-written
+   jQuery plugins and code that must be embeddable anywhere (e.g. WordPress
+   plugins) use the full "jQuery" name, or wrap code in an IIFE that locally
+   re-aliases jQuery to $, to be safe regardless of the global environment:
+
+     (function ($) {
+         // inside here, $ safely refers to jQuery
+         $(function () { ... });
+     })(jQuery);
+
+────────────────────────────────────────────────────────────────────────────────
+Q3: What are the different ways to include jQuery in a project (CDN vs npm/local, full vs slim build)?
+───────────────────────────────────────────────────────────────────────────────────────────────────────
+A: 1. CDN (Content Delivery Network) — simplest, no build step:
+        <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+      Pros: cached across sites, zero setup. Cons: external dependency, requires
+      network access, version drift if not pinned, potential privacy/CSP concerns.
+      Best practice: pin an exact version and add a Subresource Integrity (SRI)
+      hash, plus a local fallback:
+        <script src="https://code.jquery.com/jquery-3.7.1.min.js"
+                integrity="sha256-..." crossorigin="anonymous"></script>
+        <script>window.jQuery || document.write('<script src="/js/jquery.min.js">\x3C/script>')</script>
+
+   2. npm / local install — standard for any project with a bundler (webpack,
+      Vite, Rollup, etc.):
+        npm install jquery
+        import $ from 'jquery';
+      Bundles jQuery into your own build output; works offline, versioned via
+      package.json/lockfile, tree-shakeable in theory (though jQuery itself is
+      one big object, so tree-shaking benefit is minimal unless using the slim build).
+
+   3. Self-hosted static file — download jquery.min.js and serve it yourself.
+      Used in many legacy / no-build-tool projects (classic ASP.NET MVC, PHP apps).
+
+   4. Slim build — since jQuery 3.0, an alternate "slim" bundle
+      (jquery.slim.min.js) ships WITHOUT the ajax and effects (animation) modules,
+      and without deprecated event aliases. Use it when you only need DOM/selector/
+      event functionality (e.g. because you use fetch() for Ajax and CSS
+      transitions for animation) to shave meaningful file size.
+
+────────────────────────────────────────────────────────────────────────────────
+Q4: What is the difference between $(document).ready(), window.onload, and $(function(){})?
+────────────────────────────────────────────────────────────────────────────────────────────
+A: $(document).ready(handler) fires as soon as the DOM is fully parsed and safe to
+   manipulate — equivalent to the native DOMContentLoaded event. It does NOT wait
+   for images, iframes, stylesheets, or other external resources to finish loading.
+
+   window.onload = handler (or addEventListener('load', ...)) fires only after
+   EVERYTHING on the page has finished loading — every image, stylesheet, iframe,
+   font, etc. This is usually much later than DOMContentLoaded and often
+   unnecessarily delays interactive behavior.
+
+   $(function(){ ... }) is simply shorthand for $(document).ready(function(){ ... }).
+   jQuery's own documentation recommends this shorthand form. All three of these
+   are equivalent:
+        $(document).ready(function () { console.log('DOM ready'); });
+        $().ready(function () { console.log('DOM ready'); });
+        $(function () { console.log('DOM ready'); });
+
+   Important jQuery version note: prior to jQuery 3.0 you could also bind to a
+   "ready" event via $(document).on('ready', fn) — this alias was deprecated in
+   1.8 and REMOVED in jQuery 3.0. As of 3.0+, the only supported way to hook the
+   ready state is to pass a function directly to $() / .ready().
+
+   Also note: if $(document).ready() (or $(fn)) is called AFTER the DOM has
+   already finished loading (e.g. inside a <script> placed at the end of <body>,
+   or triggered dynamically after the fact), the handler fires immediately/
+   asynchronously rather than waiting — jQuery detects document.readyState.
+
+   Quick comparison:
+     $(document).ready() / $(fn)   → DOM parsed, elements exist, safe to query
+     window.onload                 → everything (images, css, iframes) finished
+     Placing <script> at end of body → similar effect to ready(), no wait needed
+
+────────────────────────────────────────────────────────────────────────────────
+Q5: What is the difference between a jQuery object and a raw DOM element?
+──────────────────────────────────────────────────────────────────────────
+A: $('div') returns a jQuery object — an array-like wrapper (with a .length
+   property and numeric indices) around zero or more raw DOM elements. It exposes
+   jQuery's methods (.html(), .css(), .on(), etc.) but is NOT itself a DOM element,
+   so native DOM properties/methods (like .innerHTML, .style, .addEventListener)
+   are not directly available on it.
+
+     var $div = $('#box');        // jQuery object (wrapped set)
+     $div.css('color', 'red');    // jQuery method — works
+     $div.style.color = 'red';    // ERROR — jQuery objects have no .style
+
+   To get back to the raw DOM element(s):
+     $div[0]                      // first raw DOM element (array-style index)
+     $div.get(0)                  // same as [0], but .get() also allows negative
+                                   // indices: $div.get(-1) = last element
+     $div.get()                   // returns a plain Array of ALL matched DOM elements
+     $div.toArray()               // same as .get() with no args
+
+   To go the other direction (wrap a raw DOM element in jQuery):
+     $(document.getElementById('box'))   // now you have jQuery methods available
+
+   This distinction is a classic interview trap: forgetting $(this) inside a
+   plain DOM callback (getting a raw element where jQuery methods are expected),
+   or vice versa, calling .querySelector() on a jQuery object.
+
+────────────────────────────────────────────────────────────────────────────────
+Q6: What is jQuery.noConflict() and when is it needed?
+───────────────────────────────────────────────────────
+A: jQuery.noConflict() relinquishes control of the global $ symbol back to whatever
+   library defined it before jQuery loaded (historically Prototype.js, MooTools,
+   or another version of jQuery), while the full "jQuery" name still works.
+
+     <script src="prototype.js"></script>
+     <script src="jquery.js"></script>
+     <script>
+         var $j = jQuery.noConflict();   // release $ back to Prototype
+         $j('#id').hide();               // use $j (or jQuery) instead of $
+         // $('#id') now calls Prototype's $, not jQuery's
+     </script>
+
+   Common use cases:
+   • Embedding a jQuery-based widget/plugin into a third-party page (e.g. a
+     WordPress plugin, an embeddable widget) that might already use $ for
+     something else, or load its own separate jQuery version.
+   • Loading two different jQuery versions on the same page — noConflict(true)
+     releases BOTH $ and jQuery, letting you assign each loaded copy to its own
+     variable.
+
+   A very common defensive pattern is wrapping plugin code in an IIFE that takes
+   jQuery as a parameter, so it works regardless of what $ means globally:
+     (function ($) {
+         $(function () { /* $ is safely jQuery here */ });
+     })(jQuery);
+
+   This need has become much rarer today since Prototype/MooTools are essentially
+   extinct, but it still matters in CMS/plugin ecosystems (WordPress in particular)
+   where many independent scripts share a single page.
+
+================================================================================
+SECTION 2: SELECTORS
+================================================================================
+
+Q7: What kinds of selectors does jQuery support?
+─────────────────────────────────────────────────
+A: jQuery's selector engine (historically called "Sizzle", though as of jQuery 4.0
+   it delegates to the browser's native querySelectorAll where possible) supports:
+
+   1. Standard CSS selectors (CSS1–CSS3):
+        $('div')              // tag
+        $('.item')             // class
+        $('#header')           // id
+        $('div.item')          // compound
+        $('ul > li')           // child combinator
+        $('div + p')           // adjacent sibling
+        $('div ~ p')           // general sibling
+        $('a[href^="https"]')  // attribute selector
+
+   2. jQuery-specific pseudo-selectors that are NOT valid CSS and are evaluated
+      by jQuery itself (see next question): :eq(), :first, :last, :even, :odd,
+      :visible, :hidden, :contains(), :has(), :parent, :animated, form
+      selectors like :checkbox/:radio/:input/:selected/:checked, etc.
+
+   3. Passing an existing DOM element or jQuery object directly:
+        $(document.getElementById('x'))
+        $(existingJqObject)
+
+   4. Creating new elements from an HTML string:
+        $('<div class="box">Hi</div>')
+
+────────────────────────────────────────────────────────────────────────────────
+Q8: What are jQuery's own pseudo-selectors (:eq, :first, :last, :even/:odd, :visible, :hidden)? How do they differ from CSS?
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+A: These selectors are jQuery extensions, NOT part of the CSS specification, so the
+   browser's native querySelectorAll cannot evaluate them — jQuery has to filter
+   the results in JavaScript after an initial (possibly broader) native query, which
+   makes them slower than pure CSS selectors.
+
+     $('li:eq(2)')      // the 3rd <li> (0-based index) — NOT the same as CSS
+                         // :nth-child(3), which is 1-based and counts among siblings
+     $('li:first')      // first matched <li> — shorthand for :eq(0)
+     $('li:last')       // last matched <li>
+     $('li:even')       // 0-based even-indexed elements (1st, 3rd, 5th...)
+     $('li:odd')        // 0-based odd-indexed elements (2nd, 4th, 6th...)
+     $('div:visible')   // elements with computed display != none, non-zero size,
+                         // and not visibility:hidden ancestor issues
+     $('div:hidden')    // opposite of :visible (includes display:none, hidden
+                         // form inputs, and detached elements)
+     $('p:contains("Hello")')  // elements containing the given text (case-sensitive)
+     $('div:has(span)')        // divs that contain at least one <span> descendant
+     $('div:animated')         // elements currently being animated by jQuery
+     $('input:checkbox')       // input[type="checkbox"] shorthand
+     $('input:checked')        // checked radio/checkbox
+     $('option:selected')      // selected <option> elements
+
+   Important distinction: CSS has its own native :first-child, :last-child,
+   :nth-child(n) (1-based, counts ALL sibling types) which are NOT the same as
+   jQuery's :first/:last/:eq(n) (0-based, apply to the already-matched set).
+   Mixing them up is a common mistake.
+
+   Because these are jQuery-only, prefer native CSS equivalents where possible
+   (e.g. :first-child, [hidden], or checking .offsetParent !== null / getClientRects
+   for visibility) for both performance and portability outside jQuery.
+
+────────────────────────────────────────────────────────────────────────────────
+Q9: How do attribute selectors work in jQuery?
+───────────────────────────────────────────────
+A: jQuery supports the full CSS3 attribute selector syntax:
+
+     $('[disabled]')              // has a "disabled" attribute (any value)
+     $('[type="text"]')           // exact match
+     $('[type!="text"]')          // jQuery-specific: NOT equal (not standard CSS)
+     $('[class^="icon-"]')        // starts with
+     $('[class$="-large"]')       // ends with
+     $('[href*="example.com"]')   // contains substring
+     $('[data-id~="5"]')          // contains "5" as a whitespace-separated word
+     $('[lang|="en"]')            // equals "en" or starts with "en-"
+
+   Attribute selectors can also be combined:
+     $('input[type="checkbox"][checked]')
+
+   [attr!="value"] is a jQuery-only extension (not valid CSS), so it cannot be
+   passed to native querySelectorAll and always falls back to jQuery's own
+   filtering — slightly slower than the others, which map straight to the DOM's
+   native querySelectorAll under the hood.
+
+────────────────────────────────────────────────────────────────────────────────
+Q10: What does the optional 'context' parameter of $(selector, context) do, and why use it?
+────────────────────────────────────────────────────────────────────────────────────────────
+A: $(selector, context) restricts the search to descendants of a given context
+   (a DOM element, jQuery object, or document), instead of searching the whole
+   document. It is functionally equivalent to $(context).find(selector).
+
+     $('.item', '#container')          // same result as:
+     $('#container').find('.item')
+
+   Practical effects:
+   • Performance — narrows the search space, which can matter on large pages
+     with many elements outside the container you care about (although modern
+     querySelectorAll is fast enough that the difference is rarely significant).
+   • Correctness — avoids accidentally matching same-named elements/classes
+     elsewhere on the page, e.g. inside a modal, a specific form, or a
+     dynamically-rendered widget you just inserted.
+
+   .find(selector) called on an already-cached jQuery object is generally
+   preferred in real code because it reads more clearly and lets you reuse a
+   cached container reference:
+     var $container = $('#container');
+     $container.find('.item').addClass('active');
+
+────────────────────────────────────────────────────────────────────────────────
+Q11: What are some selector performance tips in jQuery?
+────────────────────────────────────────────────────────
+A: 1. ID selectors are fastest — $('#id') maps almost directly to the highly
+      optimized native document.getElementById() internally.
+   2. Class and tag selectors are slower — they generally end up calling
+      getElementsByClassName / querySelectorAll and returning larger candidate
+      sets that then need filtering.
+   3. Avoid jQuery pseudo-selectors (:visible, :eq(), :contains()) when possible
+      — because they are NOT valid CSS, the browser can't optimize them natively;
+      jQuery has to do the filtering in JS after the initial DOM query.
+   4. Prefer ID-then-descendant patterns over broad universal/class-heavy chains:
+        $('#container .item')     // good — starts from a fast, unique root
+        $('.item')                 // potentially scans the whole document
+   5. Cache selections in a variable instead of re-querying the DOM repeatedly
+      (see the Performance section for more on this).
+   6. Use context / .find() to scope searches to a known subtree rather than
+      searching the entire document each time.
+   7. Right-to-left evaluation quirk (historical): older selector engines
+      evaluated compound selectors somewhat right-to-left, so an overly broad
+      rightmost simple selector (e.g. "div div div .item") could be slow because
+      many candidate elements are gathered before being filtered by ancestor
+      constraints — keeping selectors short and specific avoids this.
+   8. When possible, use native document.querySelectorAll(selector) directly if
+      you don't need jQuery's chainable object — it avoids Sizzle/jQuery
+      selector-parsing overhead entirely.
+
+────────────────────────────────────────────────────────────────────────────────
+Q12: How do :checkbox, :radio, :input, :text, :selected, and :checked selectors work, and why are they slow?
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+A: These are jQuery convenience selectors for form elements:
+
+     $(':checkbox')   // input[type="checkbox"]
+     $(':radio')      // input[type="radio"]
+     $(':text')       // input[type="text"] (or inputs with no type attribute)
+     $(':input')      // ALL form controls: input, textarea, select, button
+     $(':selected')   // selected <option> elements
+     $(':checked')    // checked checkboxes/radios
+
+   They are pure jQuery extensions (not valid CSS attribute selectors), so like
+   :visible/:eq(), they cannot be delegated to the browser's native
+   querySelectorAll and require jQuery's own JS-level filtering, making them
+   slower than the equivalent explicit attribute selector:
+
+     $(':checkbox')                    // slower — jQuery-level filter
+     $('input[type="checkbox"]')       // faster — native querySelectorAll
+
+   Prefer the explicit attribute-selector form in performance-sensitive code,
+   especially inside loops or on pages with large forms.
+
+================================================================================
+SECTION 3: DOM MANIPULATION
+================================================================================
+
+Q13: What is the difference between .html(), .text(), and .val()?
+──────────────────────────────────────────────────────────────────
+A: .html([htmlString])
+     • GET: returns the innerHTML (markup) of the FIRST matched element only.
+     • SET: replaces the innerHTML of ALL matched elements with the given
+       string, parsing it as HTML (tags become real elements).
+     • Not XSS-safe — inserts raw markup, including <script>-adjacent content,
+       so never pass untrusted user input directly to .html().
+
+   .text([textString])
+     • GET: returns the combined text content (textContent) of ALL matched
+       elements concatenated together (not just the first).
+     • SET: replaces content of ALL matched elements with a plain TEXT node —
+       any HTML-looking string is escaped/rendered literally, not parsed as
+       markup. This makes .text() the safe choice for inserting user-supplied
+       content (prevents HTML/script injection).
+
+   .val([value])
+     • Gets or sets the "value" of form elements: <input>, <textarea>, <select>.
+     • GET on a <select multiple> returns an ARRAY of selected values.
+     • SET on a <select> checks the option(s) matching the given value(s);
+       passing an array checks multiple options in a multi-select.
+     • Has no meaningful effect on non-form elements.
+
+     $('#title').html('<b>Bold</b>');   // renders bold text
+     $('#title').text('<b>Bold</b>');   // renders the LITERAL string "<b>Bold</b>"
+     $('#email').val();                 // "user@example.com"
+     $('#email').val('new@example.com');
+
+────────────────────────────────────────────────────────────────────────────────
+Q14: What is the difference between .append()/.prepend() and .before()/.after()? What about the *To variants?
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+A: .append(content)   — inserts content as the LAST CHILD, inside the matched
+                       element(s).
+   .prepend(content)  — inserts content as the FIRST CHILD, inside the matched
+                       element(s).
+   .before(content)   — inserts content as a SIBLING immediately BEFORE the
+                       matched element(s) (outside it, same parent level).
+   .after(content)    — inserts content as a SIBLING immediately AFTER the
+                       matched element(s).
+
+     <div id="box"><span>existing</span></div>
+
+     $('#box').append('<p>A</p>');   // <div id="box"><span>existing</span><p>A</p></div>
+     $('#box').prepend('<p>A</p>');  // <div id="box"><p>A</p><span>existing</span></div>
+     $('#box').before('<p>A</p>');   // <p>A</p><div id="box">...
+     $('#box').after('<p>A</p>');    // <div id="box">...</div><p>A</p>
+
+   Each has a mirror-image "To" method where the SUBJECT and the ARGUMENT swap
+   places — useful when you already have the new content selected and want to
+   attach it to a target:
+     $('<p>A</p>').appendTo('#box');     // same result as $('#box').append(...)
+     $('<p>A</p>').prependTo('#box');
+     $('<p>A</p>').insertBefore('#box');
+     $('<p>A</p>').insertAfter('#box');
+
+   All of these accept HTML strings, DOM elements, jQuery objects, or arrays of
+   elements, and (append/prepend only) also accept a function that returns the
+   content to insert, invoked once per matched element.
+
+────────────────────────────────────────────────────────────────────────────────
+Q15: What is the difference between .remove(), .empty(), and .detach()?
+────────────────────────────────────────────────────────────────────────
+A: .remove([selector])
+     • Removes the matched element(s) themselves from the DOM entirely.
+     • Also removes jQuery's associated data and event handlers from those
+       elements (and their descendants) to prevent memory leaks.
+     • Use when you're permanently done with the element.
+
+   .empty()
+     • Does NOT remove the matched element itself — removes all of its
+       CHILD nodes (and their descendants), clearing jQuery data/events for
+       those removed children.
+     • Equivalent-ish to setting el.innerHTML = '' but jQuery also cleans up
+       its internal data/event registry for the removed descendants.
+
+   .detach([selector])
+     • Removes the matched element(s) from the DOM, exactly like .remove()...
+     • ...BUT deliberately KEEPS jQuery's attached data and event handlers
+       intact, so the element can be safely re-inserted later WITHOUT needing
+       to re-bind events.
+     • Ideal for "pull an element out, do heavy work, put it back" patterns —
+       e.g. detach a large table before re-sorting/re-rendering rows, then
+       reattach it, to avoid triggering a reflow for every intermediate change.
+
+     var $rows = $('#table tbody tr').detach();
+     // ... sort/manipulate $rows in memory, no live DOM, no reflow cost ...
+     $('#table tbody').append($rows);   // handlers still work, no rebinding needed
+
+   Quick comparison:
+     .remove()  → element gone, data/events cleaned up (final removal)
+     .empty()   → element stays, children gone, children's data/events cleaned up
+     .detach()  → element gone from DOM, data/events PRESERVED (temporary removal)
+
+────────────────────────────────────────────────────────────────────────────────
+Q16: What does .clone() do, and what do its boolean arguments control?
+───────────────────────────────────────────────────────────────────────
+A: .clone([withDataAndEvents], [deepWithDataAndEvents]) returns a deep copy of the
+   matched element(s) (including all descendant nodes), which you can then insert
+   elsewhere in the DOM.
+
+     var $copy = $('#template').clone();
+     $copy.appendTo('#list');
+
+   By default, .clone() copies markup/attributes only — it does NOT copy jQuery
+   data or bound event handlers onto the clone.
+
+     .clone(true)         // ALSO copies data + event handlers of the matched
+                           // element(s) themselves onto the clone
+     .clone(true, true)   // copies data + events for the matched elements AND
+                           // for all of their descendant elements too
+
+   Common gotcha: cloning an element with a duplicate id attribute produces two
+   elements sharing the same id, which is invalid HTML — you should update or
+   remove the id after cloning (e.g. via .attr('id', newId) or .removeAttr('id')).
+
+────────────────────────────────────────────────────────────────────────────────
+Q17: How do you create new DOM elements with jQuery, and what does $.parseHTML() do?
+─────────────────────────────────────────────────────────────────────────────────────
+A: Passing an HTML string to $() creates new, detached (not-yet-in-the-DOM)
+   elements without touching the existing document:
+
+     var $div = $('<div class="box">Hello</div>');
+     var $li  = $('<li>', { text: 'Item', class: 'active' });  // attr-object form
+
+   You can then insert them anywhere with append/prepend/before/after/etc:
+     $('#list').append($li);
+
+   For BUILDING UP many elements, string concatenation (or array + join) and a
+   single .append() call at the end is far more performant than calling .append()
+   once per element in a loop, because each DOM insertion can trigger layout/
+   reflow work:
+     var html = [];
+     items.forEach(function (item) { html.push('<li>' + item + '</li>'); });
+     $('#list').append(html.join(''));    // one DOM write instead of N
+
+   $.parseHTML(htmlString) parses a string into an ARRAY of plain DOM nodes
+   (not a jQuery object, not inserted anywhere) — useful when you want to inspect
+   or filter markup before deciding whether/where to insert it, or when the
+   string might contain a full document fragment you want to walk manually:
+     var nodes = $.parseHTML('<p>A</p><p>B</p>');   // [ <p>A</p>, <p>B</p> ]
+
+────────────────────────────────────────────────────────────────────────────────
+Q18: What is the difference between .attr() and .prop()? Why does it matter for checkboxes?
+────────────────────────────────────────────────────────────────────────────────────────────
+A: .attr(name [, value])
+     • Gets/sets an HTML ATTRIBUTE — the value as written/reflected in markup.
+     • Best for: custom attributes, data-* attributes (though .data() is usually
+       nicer for those), href, src, title, colspan, and anything without a
+       meaningful "live" DOM property.
+
+   .prop(name [, value])
+     • Gets/sets a DOM PROPERTY — the current, live state of the object in
+       memory, which can differ from the original HTML attribute.
+     • Best for: boolean properties like checked, selected, disabled, readOnly,
+       and things like tagName, nodeName, defaultChecked.
+
+   The classic checkbox example — WHY this distinction matters:
+     <input type="checkbox" id="agree" checked>
+
+     $('#agree').attr('checked');   // "checked" (the string) — reflects the
+                                     // ORIGINAL markup attribute, not necessarily
+                                     // the box's current checked state
+     $('#agree').prop('checked');   // true / false — reflects the CURRENT,
+                                     // live checked state, updates as the user
+                                     // clicks the checkbox
+
+   If a user manually unchecks the box, .attr('checked') still returns the
+   attribute as originally parsed (jQuery does NOT keep .attr('checked') in sync
+   with user interaction), while .prop('checked') always reflects reality.
+   → Always use .prop() for checked/selected/disabled state.
+
+   Rule of thumb: use .prop() for booleans/DOM-state, .attr() for markup-level
+   attributes (especially custom/data attributes not modeled as JS properties).
+   Since jQuery 1.6, .attr() and .prop() are explicitly separate APIs — before
+   1.6, .attr() tried to handle both roles, which caused many of these bugs.
+
+────────────────────────────────────────────────────────────────────────────────
+Q19: How does .css() work for getting and setting styles?
+──────────────────────────────────────────────────────────
+A: .css(propertyName)                       — GET a single computed style value
+                                             (as a string, e.g. "16px")
+   .css(propertyName, value)                — SET a single property
+   .css({ prop1: val1, prop2: val2, ... })  — SET multiple properties at once
+   .css(propertyName, function(index, currentValue){ return newValue; })
+                                             — SET based on a per-element callback
+
+     $('.box').css('color');                       // "rgb(255, 0, 0)"
+     $('.box').css('color', 'blue');
+     $('.box').css({ color: 'blue', fontSize: '14px' });   // camelCase property names
+     $('.box').css('width', function (i, w) {
+         return parseFloat(w) * 2 + 'px';           // double each box's width
+     });
+
+   Notes:
+   • Property names can be given in camelCase (fontSize) or, since jQuery
+     normalizes them, quoted hyphenated CSS form ('font-size') — both work.
+   • Numeric values for properties that expect a length are automatically
+     suffixed with "px" unless the property is unit-less (e.g. z-index, opacity,
+     lineHeight): $('.box').css('width', 100) → "100px".
+   • Getting .css('width') on an element uses the browser's computed style
+     (essentially getComputedStyle), so it reflects the FINAL rendered value
+     including any CSS from stylesheets, not just inline styles.
+   • For layout dimensions specifically, prefer the dedicated .width()/.height()/
+     .outerWidth()/.innerHeight() methods over .css() — see the Advanced section
+     for the important differences between them.
+
+────────────────────────────────────────────────────────────────────────────────
+Q20: What do .addClass(), .removeClass(), .toggleClass(), and .hasClass() do?
+──────────────────────────────────────────────────────────────────────────────
+A: .addClass(className)     — adds one or more space-separated classes.
+   .removeClass([className]) — removes one or more classes; called with NO
+                              argument, removes ALL classes.
+   .toggleClass(className [, state]) — adds the class if absent, removes it if
+                              present; the optional boolean "state" argument
+                              forces add (true) or remove (false) instead of
+                              toggling, which is handy for syncing a class to
+                              some other boolean condition:
+                                $('.tab').toggleClass('active', isSelected);
+   .hasClass(className)     — returns true/false, does NOT modify anything.
+
+     $('#box').addClass('highlight visible');   // multiple classes, space separated
+     $('#box').removeClass('highlight');
+     $('#box').toggleClass('open');
+     $('#box').hasClass('open');                 // true/false
+
+   All of these (except .hasClass, which is a boolean test) accept a function
+   callback for per-element dynamic class names, and all except .hasClass return
+   the jQuery object for chaining. Modern vanilla JS equivalent: el.classList.add/
+   remove/toggle/contains — functionally very similar, and classList itself was
+   directly inspired by jQuery's class API.
+
+────────────────────────────────────────────────────────────────────────────────
+Q21: What is the difference between .removeAttr() and setting .attr(name, null)? How do you remove a CSS property?
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+A: .removeAttr(name) completely removes the attribute from the DOM element(s) —
+   e.g. $('#input').removeAttr('disabled') removes the disabled attribute
+   entirely (equivalent to el.removeAttribute('disabled')).
+
+   Calling .attr(name, null) also removes the attribute in modern jQuery (jQuery
+   treats a null value passed to .attr() as "remove this attribute"), but
+   .removeAttr() is the more explicit/idiomatic choice and is preferred for
+   clarity — especially for boolean attributes like disabled/checked/readonly,
+   where leaving a stray attribute in a "falsy-looking" state (e.g.
+   disabled="false") is still truthy in HTML (ANY presence of the attribute
+   counts, regardless of its string value).
+
+   To remove an inline CSS property, pass an empty string as the value:
+     $('#box').css('color', '');   // removes the inline "color" style,
+                                    // falling back to stylesheet/default value
+
+   To clear ALL inline styles: $('#box').removeAttr('style');
+
+================================================================================
+SECTION 4: TRAVERSING THE DOM
+================================================================================
+
+Q22: What is the difference between .parent(), .parents(), .parentsUntil(), and .closest()?
+────────────────────────────────────────────────────────────────────────────────────────────
+A: .parent([selector])        — the immediate (direct) parent of each matched
+                               element only, optionally filtered by selector.
+   .parents([selector])       — ALL ancestors up to (and including) <html>,
+                               optionally filtered, returned in order from
+                               nearest to furthest.
+   .parentsUntil(selector [, filter]) — ancestors walked upward, STOPPING just
+                               before (not including) the element matched by
+                               "selector". Useful for "everything between me
+                               and my container" style traversal.
+   .closest(selector)         — walks UP from each element (starting with the
+                               element ITSELF, unlike .parents()), returning
+                               the FIRST ancestor (nearest match) matching the
+                               selector; stops as soon as it finds one.
+
+     <div id="app">
+       <div class="card">
+         <button id="btn">Click</button>
+       </div>
+     </div>
+
+     $('#btn').parent();               // <div class="card">
+     $('#btn').parents();              // [.card, #app, body, html]
+     $('#btn').parents('#app');        // [#app]
+     $('#btn').parentsUntil('#app');   // [.card]  (stops before #app)
+     $('#btn').closest('.card');       // [.card] — nearest match, includes self-check
+     $('#btn').closest('#btn');        // [#btn] — closest() checks the element itself first
+
+   .closest() is usually the right/most efficient choice inside event handlers
+   (e.g. delegated click handlers) because it stops at the first match instead
+   of building the full ancestor chain, and because it naturally handles the
+   "the click might have landed on a child of the thing I care about" case.
+
+────────────────────────────────────────────────────────────────────────────────
+Q23: What is the difference between .children() and .find()?
+─────────────────────────────────────────────────────────────
+A: .children([selector]) returns only the DIRECT children (one level down) of each
+   matched element, optionally filtered by a selector. It never looks deeper
+   than one level.
+
+   .find(selector) searches ALL descendants at ANY depth (children, grandchildren,
+   etc.) — it requires a selector argument and is roughly equivalent to calling
+   querySelectorAll scoped to each matched element.
+
+     <ul id="list">
+       <li>A<span>nested</span></li>
+       <li>B</li>
+     </ul>
+
+     $('#list').children();        // the two <li> elements only
+     $('#list').children('span');  // empty — span is not a direct child of #list
+     $('#list').find('span');      // the nested <span> (any depth)
+     $('#list').find('li');        // both <li> elements
+
+   .find() is generally the more common/flexible traversal method for "give me
+   all matching descendants", while .children() is useful when you specifically
+   need direct structural children (e.g. iterating direct <li> items of a list
+   without also matching nested lists inside them).
+
+────────────────────────────────────────────────────────────────────────────────
+Q24: What do .siblings(), .next()/.prev(), and .nextAll()/.prevAll() do?
+─────────────────────────────────────────────────────────────────────────
+A: .siblings([selector]) — all sibling elements (same parent, excluding the
+      element itself), optionally filtered.
+   .next([selector])     — the immediately following sibling only.
+   .prev([selector])     — the immediately preceding sibling only.
+   .nextAll([selector])  — ALL following siblings (not just the first).
+   .prevAll([selector])  — ALL preceding siblings.
+   .nextUntil(selector)  — following siblings up to (not including) a match.
+   .prevUntil(selector)  — preceding siblings up to (not including) a match.
+
+     <ul>
+       <li id="a">A</li>
+       <li id="b" class="current">B</li>
+       <li id="c">C</li>
+       <li id="d">D</li>
+     </ul>
+
+     $('#b').siblings();   // [A, C, D]
+     $('#b').next();       // [C]
+     $('#b').prev();       // [A]
+     $('#b').nextAll();    // [C, D]
+     $('#b').prevAll();    // [A]
+
+   All of these accept an optional selector to filter the result set, e.g.
+   $('#b').siblings('.active') only returns siblings that also have class
+   "active".
+
+────────────────────────────────────────────────────────────────────────────────
+Q25: What is the difference between .filter(), .not(), and .is()?
+──────────────────────────────────────────────────────────────────
+A: .filter(selectorOrFn) — reduces the CURRENT matched set down to only the
+      elements that match the given selector (or for which the callback
+      returns true). Never expands the set — only narrows it.
+
+   .not(selectorOrFn) — the exact OPPOSITE of .filter(): removes elements that
+      match, keeping everything that does NOT match.
+
+   .is(selectorOrFn) — does not change the matched set at all; returns a plain
+      BOOLEAN — true if AT LEAST ONE of the matched elements satisfies the
+      selector/condition.
+
+     $('li').filter('.active');          // only the <li> elements with class active
+     $('li').not('.active');             // all <li> elements WITHOUT class active
+     $('li').is('.active');              // true/false — is any of them active?
+     $('#btn').is(':disabled');          // true/false
+
+   .filter() and .not() also accept a function invoked once per element
+   (with 'this' bound to the raw DOM element), returning true to keep it:
+     $('li').filter(function (index) {
+         return $(this).text().length > 10;
+     });
+
+   .is() is very commonly used inside event handlers to branch behavior
+   depending on which element (or what state) was actually interacted with,
+   e.g. checking event.target inside a delegated handler with
+   $(event.target).is('a') to see whether the click landed on a link.
+
+────────────────────────────────────────────────────────────────────────────────
+Q26: What is the difference between .each() and $.each()? How does chaining work?
+──────────────────────────────────────────────────────────────────────────────────
+A: .each(function(index, element)) is a jQuery OBJECT METHOD — it iterates over
+   the elements currently wrapped in that jQuery object. Inside the callback,
+   'this' is bound to the raw DOM element (not a jQuery object — you must wrap
+   it yourself with $(this) to use jQuery methods on it). Returning false from
+   the callback breaks out of the loop early (like a "break").
+
+     $('li').each(function (index, el) {
+         console.log(index, $(this).text());   // this === el, the raw DOM node
+     });
+
+   $.each(collection, function(indexOrKey, value)) is a STATIC/GENERIC UTILITY —
+   it is not tied to a jQuery selection at all, and can iterate over any array,
+   array-like object, or plain object (iterating keys). 'this' inside the
+   callback is bound to the current VALUE (which for primitives is boxed, e.g. a
+   number becomes a Number object) — usually people ignore 'this' here and use
+   the passed value parameter instead. It also supports early exit via
+   'return false'.
+
+     $.each([10, 20, 30], function (i, val) { console.log(i, val); });
+     $.each({ a: 1, b: 2 }, function (key, val) { console.log(key, val); });
+
+   Modern JS equivalents: Array.prototype.forEach (no early-break support,
+   would need .some()/.every() for that), for...of (supports break/continue
+   natively and works on any iterable), and Object.entries(obj).forEach(...)
+   for plain objects.
+
+   CHAINING: most jQuery methods (including .each()) explicitly 'return this;'
+   at the end — "this" being the same jQuery object (or a new jQuery object
+   wrapping a modified set, e.g. after .filter()/.find()) — which is what lets
+   you write fluent chains like:
+     $('li').addClass('item').css('color', 'red').fadeIn();
+
+   Methods that instead return a VALUE (a "getter" call, e.g. .html() with no
+   arguments, .css('color') with only a property name, .text() with no
+   arguments, .val() with no arguments) break the chain because they return a
+   string/number/etc rather than the jQuery object. To resume chaining after a
+   traversal call like .find() or .parent(), .end() can be used to pop back to
+   the previous matched set within the same chain:
+     $('#list').find('.active').addClass('x').end().addClass('was-searched');
+
+────────────────────────────────────────────────────────────────────────────────
+Q27: What is the difference between .add() and combining two jQuery selections?
+────────────────────────────────────────────────────────────────────────────────
+A: .add(selectorOrElementsOrHtml) creates a NEW jQuery object that includes both
+   the ORIGINAL matched set and the additional elements/selector/HTML passed in
+   — it does not modify the original selection, it returns a new combined one.
+
+     $('.header').add('.footer').css('color', 'gray');   // styles both groups
+                                                           // in one call
+
+   This is different from simply calling $('.header, .footer') (a single
+   comma-separated CSS selector), though the practical result is often the
+   same — .add() is more useful when you want to combine a jQuery selection
+   with elements you already have a reference to (e.g. a jQuery object built up
+   incrementally, or DOM nodes not easily expressed as a single selector
+   string).
+
+────────────────────────────────────────────────────────────────────────────────
+Q28: How would you get the index of an element among its siblings, or within a jQuery collection?
+──────────────────────────────────────────────────────────────────────────────────────────────────
+A: .index() (no arguments) — returns the index of the FIRST matched element among
+      its siblings (position within its parent's children).
+   .index(selector) — returns the index of the first matched element relative to
+      the elements matched by the given selector.
+   .index(element) — returns the position of the given DOM element/jQuery object
+      within the CURRENT matched set (or -1 if not found).
+
+     $('#b').index();                 // position of #b among its siblings
+     $('li').index(document.getElementById('b'));  // position of #b within all <li>
+
+   Common use case: a delegated click handler on a list of items where you need
+   to know "which row was clicked" — either via .index() or (more robustly) by
+   storing the item's id/data on the element itself with .data()/data-* rather
+   than relying on positional index, since index can shift if the list is
+   re-ordered or filtered.
+
+================================================================================
+SECTION 5: EVENTS
+================================================================================
+
+Q29: What is .on() / .off(), and why is it considered the modern, unified event API?
+─────────────────────────────────────────────────────────────────────────────────────
+A: Since jQuery 1.7, .on(events [, selector], handler) and .off() are the single
+   recommended API for ALL event binding — both direct binding (attach a handler
+   to elements currently in the matched set) and delegated binding (attach a
+   handler to an ancestor that listens for events bubbling up from descendants,
+   including ones added later).
+
+     // Direct binding — only affects elements matching #btn RIGHT NOW
+     $('#btn').on('click', function (e) { ... });
+
+     // Delegated binding — #list listens on behalf of ANY .item descendant,
+     // including ones added to the DOM after this call runs
+     $('#list').on('click', '.item', function (e) { ... });
+
+     // Removing handlers
+     $('#btn').off('click');              // remove all click handlers
+     $('#btn').off('click', handlerFn);   // remove one specific handler
+     $('#list').off('click', '.item');    // remove a delegated handler
+
+   .on()/.off() REPLACED and unified four older, separate APIs:
+     .bind()/.unbind()        — direct binding only, no delegation
+     .live()/.die()           — old delegation approach, bound to document
+     .delegate()/.undelegate()— older delegation API, opposite argument order
+                                 from .on(): $(ancestor).delegate(selector, event, fn)
+
+   Internally, .bind() and .delegate() are now just thin wrappers implemented in
+   terms of .on() (when still present at all) — so learning .on()/.off() covers
+   every case with one consistent API and argument order.
+
+────────────────────────────────────────────────────────────────────────────────
+Q30: What is event delegation, and why does it matter for dynamically added elements?
+──────────────────────────────────────────────────────────────────────────────────────
+A: Event delegation means attaching ONE handler to a stable ANCESTOR element,
+   which listens for events that BUBBLE UP from descendant elements matching a
+   given selector — rather than attaching a separate handler directly to every
+   individual descendant.
+
+     $('#list').on('click', '.item', function (e) {
+         console.log('clicked', $(this).text());
+     });
+
+   How it works: the click event fires on the actual element clicked (say, a
+   .item inside #list) and bubbles up through the DOM tree. jQuery's delegated
+   handler on #list intercepts the bubbling event and checks whether
+   event.target (or an ancestor of it, up to #list) matches the '.item'
+   selector; if so, the handler runs with 'this' set to the matched .item
+   element (not #list, and not necessarily the literal event.target if the
+   click landed on a child of .item).
+
+   Why it matters for DYNAMIC content: a DIRECT binding only attaches to
+   elements that exist AT THE MOMENT .on() is called:
+     $('.item').on('click', fn);   // only affects .item elements THAT EXIST NOW
+                                    // — items added later via append() get NO handler
+
+   A DELEGATED binding keeps working for elements added to the DOM in the
+   future, because the listener actually lives on the ancestor (#list) and
+   jQuery re-evaluates the selector against whatever triggered the bubbled
+   event, every single time:
+     $('#list').on('click', '.item', fn);   // works for items added tomorrow too
+
+   Delegation also has a PERFORMANCE benefit for large lists — one listener
+   instead of thousands — and a MEMORY benefit, since there's nothing to clean
+   up per-row when rows are removed (no per-element handler references left
+   dangling).
+
+────────────────────────────────────────────────────────────────────────────────
+Q31: Why are .live() and .delegate()/.bind() considered legacy? What is their status in modern jQuery?
+───────────────────────────────────────────────────────────────────────────────────────────────────────
+A: .live(events, handler)
+     • Deprecated in jQuery 1.7, REMOVED entirely in jQuery 1.9.
+     • Always delegated from the document root regardless of how deep the
+       actual container was, which was slow (event always bubbled all the way
+       to document) and had several bugs around chaining/stopPropagation.
+     • No longer usable at all in any current jQuery version — code using
+       .live() must be migrated to .on().
+
+   .delegate(selector, events, handler) / .undelegate()
+     • Still technically present in modern jQuery (3.x) but considered LEGACY —
+       deprecated in favor of .on(). Internally .delegate() is implemented as a
+       thin call to .on() with reordered arguments.
+     • Deprecated as of jQuery 3.x and slated for removal in jQuery 4.x, along
+       with .bind()/.unbind(), as part of removing old, redundant aliases.
+
+   .bind(events, handler) / .unbind()
+     • DIRECT-only binding (no delegation support) — the original event API
+       before .on() existed.
+     • Deprecated as of jQuery 3.x in favor of .on()/.off() (which is a strict
+       superset of what .bind() could do), and removed in jQuery 4.x.
+
+   Practical takeaway for an interview: in any jQuery 3.x/4.x codebase (or new
+   code in general), use .on()/.off() exclusively — for direct binding, for
+   delegation, and for everything .bind()/.delegate()/.live() used to do.
+
+   Quick status table:
+     .live()                → REMOVED (1.9)
+     .bind() / .unbind()    → deprecated 3.x, REMOVED in 4.x
+     .delegate()/.undelegate() → deprecated 3.x, REMOVED in 4.x
+     .on() / .off()          → current, unified, recommended API
+
+────────────────────────────────────────────────────────────────────────────────
+Q32: What cross-browser event problems did jQuery historically normalize?
+──────────────────────────────────────────────────────────────────────────
+A: Before evergreen browsers and the DOM Level 3 Events spec became universal,
+   raw browser event handling differed substantially, particularly in old
+   Internet Explorer (IE8 and earlier):
+
+     Feature              Old IE (attachEvent model)   Standard (addEventListener)
+     ------------------   ---------------------------   ---------------------------
+     Attaching a handler  el.attachEvent('onclick', fn)  el.addEventListener('click', fn)
+     The event object     window.event (global, not      passed as the first argument
+                           passed as an argument)         to the handler
+     Target element        event.srcElement               event.target
+     Prevent default       event.returnValue = false      event.preventDefault()
+     Stop bubbling          event.cancelBubble = true      event.stopPropagation()
+     "this" inside handler  NOT the element (often window) the element the handler
+                                                            is bound to
+     Mouse button info      event.button (different        event.which (jQuery
+                             numbering than the standard)   normalizes this)
+
+   jQuery's event system created a normalized "jQuery.Event" wrapper object
+   around the native event, giving you consistent properties (.target,
+   .which, .pageX/.pageY, .relatedTarget, etc.) and consistent methods
+   (.preventDefault(), .stopPropagation(), .stopImmediatePropagation()) no
+   matter which browser you were in, plus correct 'this' binding to the bound
+   element inside the handler.
+
+   jQuery also patched a few event-bubbling gaps in older browsers, notably
+   making non-bubbling events like focus/blur/change/submit work reliably with
+   delegation (internally mapping delegated focus/blur handling onto the
+   bubbling focusin/focusout events).
+
+   Since old IE is extinct and all evergreen browsers implement the standard
+   addEventListener/Event model consistently, this normalization work matters
+   far less today than it did historically — it's one of the biggest reasons
+   raw vanilla JS event handling is now a fully viable alternative to jQuery.
+
+────────────────────────────────────────────────────────────────────────────────
+Q33: What is the difference between .trigger() and .triggerHandler()?
+──────────────────────────────────────────────────────────────────────
+A: .trigger(eventType [, extraParameters])
+     • Simulates the FULL native event lifecycle: it BUBBLES up through
+       ancestors (so delegated handlers on parents also fire), and — for
+       certain event types — also fires the browser's DEFAULT ACTION.
+       E.g. $('form').trigger('submit') can actually submit the form (unless a
+       handler calls preventDefault()); $('#link').trigger('click') can
+       navigate if it's an <a href="...">.
+     • Runs on EVERY matched element in the set.
+
+   .triggerHandler(eventType [, extraParameters])
+     • Only invokes jQuery-BOUND handlers directly attached to the matched
+       element — does NOT bubble, and does NOT trigger the browser's native
+       default action.
+     • Only affects the FIRST matched element (unlike .trigger()).
+     • Returns whatever value the handler itself returned (rather than the
+       jQuery object), so it does not support chaining.
+
+   Use .trigger() to simulate a "real" user interaction including bubbling/
+   default behavior; use .triggerHandler() when you specifically want to
+   invoke your own bound JS logic without side effects like page navigation
+   or form submission — e.g. unit-testing a handler function in isolation.
+
+     $('#btn').trigger('click');          // fires bound handlers + bubbles +
+                                           // triggers real click behavior
+     $('#btn').triggerHandler('click');   // fires bound handlers only, no bubble,
+                                           // no native click side-effects
+
+────────────────────────────────────────────────────────────────────────────────
+Q34: How do you create and fire custom events with jQuery?
+───────────────────────────────────────────────────────────
+A: jQuery lets you define and trigger arbitrary, application-specific event names
+   exactly like built-in ones — .on() to listen, .trigger() to fire:
+
+     $(document).on('cart:updated', function (event, cart) {
+         console.log('Cart now has', cart.items.length, 'items');
+     });
+
+     $(document).trigger('cart:updated', [cartObject]);
+     // extraParameters (the array) are passed as additional arguments to the
+     // handler AFTER the event object itself
+
+   This is a common pattern for decoupling modules in a jQuery-based codebase —
+   e.g. a shopping-cart module fires 'cart:updated' whenever state changes, and
+   any number of unrelated UI components (a header badge, a sidebar summary)
+   can listen for it without the cart module needing to know they exist.
+
+   Namespacing custom events (see below) is especially useful here to avoid
+   collisions with third-party plugins that might use a similarly generic
+   event name.
+
+────────────────────────────────────────────────────────────────────────────────
+Q35: What does .one() do, and what are namespaced events?
+──────────────────────────────────────────────────────────
+A: .one(events [, selector], handler) binds a handler that runs AT MOST ONCE —
+   after it fires the first time, jQuery automatically removes it (equivalent to
+   manually calling .off() inside the handler after the first invocation).
+
+     $('#startBtn').one('click', function () {
+         console.log('This only logs on the very first click');
+     });
+
+   Namespaced events let you tag a bound handler with a custom label (after a
+   dot) so you can later target JUST that handler (or group of handlers) for
+   removal, without disturbing other unrelated handlers bound to the same event
+   type on the same element:
+
+     $(window).on('resize.myPlugin', onResize);
+     $(window).on('resize.otherPlugin', onOtherResize);
+
+     $(window).off('resize.myPlugin');   // removes ONLY the myPlugin handler,
+                                          // otherPlugin's resize handler survives
+
+     $(window).off('.myPlugin');         // removes ALL handlers (of any event
+                                          // type) tagged with the myPlugin namespace
+
+   Namespacing is considered a best practice for plugin authors and for any
+   code attaching handlers to shared/global targets (window, document, body),
+   since it avoids accidentally clobbering someone else's handlers with a blind
+   .off('resize').
+
+────────────────────────────────────────────────────────────────────────────────
+Q36: What is the difference between .stopPropagation(), .preventDefault(), and .stopImmediatePropagation()?
+────────────────────────────────────────────────────────────────────────────────────────────────────────────
+A: event.preventDefault()
+     • Cancels the browser's default action for that event (e.g. following a
+       link's href, submitting a form, checking a checkbox) — but the event
+       still BUBBLES normally, so other handlers (including delegated ones on
+       ancestors) still run.
+
+   event.stopPropagation()
+     • Stops the event from bubbling further up the DOM — ancestor handlers
+       (including delegated ones) will NOT see this event — but does NOT cancel
+       the browser's default action, and does NOT stop OTHER handlers bound to
+       the SAME element from also running.
+
+   event.stopImmediatePropagation()
+     • Does everything stopPropagation() does (stops bubbling), PLUS prevents
+       any OTHER handlers bound to the SAME element/event from running at all
+       (even ones registered after this one) — the most aggressive of the three.
+
+   Returning 'false' from a jQuery event handler is shorthand equivalent to
+   calling BOTH event.preventDefault() AND event.stopPropagation() — a
+   convenience that's convenient but can be a footgun, since it's easy to
+   accidentally stop propagation when you only meant to prevent default (or
+   vice versa) by just returning false out of habit.
+
+     $('a.no-follow').on('click', function (e) {
+         e.preventDefault();     // don't navigate
+         // event still bubbles — a delegated ancestor handler still fires
+     });
+
+================================================================================
+SECTION 6: EFFECTS AND ANIMATIONS
+================================================================================
+
+Q37: What do .show(), .hide(), and .toggle() do, with and without a duration?
+──────────────────────────────────────────────────────────────────────────────
+A: With NO arguments, .show()/.hide() are instant — they just set the inline
+   style display:none (hide) or restore the element's previous/default display
+   value (show; jQuery remembers the original display type, e.g. "block" vs
+   "inline", so it doesn't naively force display:block on a <span>).
+
+     $('#box').hide();       // instantly display:none
+     $('#box').show();       // instantly restored
+
+   With a DURATION (milliseconds, or "fast"/"slow"), they become ANIMATED —
+   jQuery animates height, width, and opacity together to visually shrink/grow
+   the element out of / into view, then sets display accordingly at the end:
+
+     $('#box').hide(300);                 // animated fade+shrink over 300ms
+     $('#box').show(300, function () {    // optional callback on completion
+         console.log('now visible');
+     });
+
+   .toggle([duration] [, callback]) switches between shown and hidden based on
+   current state — equivalent to calling .hide() if currently visible, or
+   .show() if currently hidden.
+
+     $('#box').toggle();       // instant show/hide toggle
+     $('#box').toggle(200);    // animated toggle
+
+────────────────────────────────────────────────────────────────────────────────
+Q38: What is the difference between .fadeIn()/.fadeOut()/.fadeToggle() and .fadeTo()?
+──────────────────────────────────────────────────────────────────────────────────────
+A: .fadeIn([duration], [callback])   — animates opacity from 0 to 1, and sets
+      display back to its natural value.
+   .fadeOut([duration], [callback])  — animates opacity from 1 to 0, then sets
+      display:none once fully transparent.
+   .fadeToggle([duration], [callback]) — fades in if hidden, fades out if visible.
+   .fadeTo(duration, targetOpacity, [callback]) — animates to an ARBITRARY
+      opacity value (not necessarily 0 or 1), and — unlike the other fade
+      methods — does NOT change display:none/block at the end, so an element
+      faded to 0 with .fadeTo() is still present/interactive/taking up layout
+      space, just invisible; you must hide it explicitly if you want it removed
+      from view/interaction.
+
+     $('#box').fadeOut(400);
+     $('#box').fadeTo(400, 0.5);   // half-transparent, stays in the layout
+
+────────────────────────────────────────────────────────────────────────────────
+Q39: What do .slideUp(), .slideDown(), and .slideToggle() do?
+──────────────────────────────────────────────────────────────
+A: These animate an element's HEIGHT (and manage overflow) to create a collapse/
+   expand effect, commonly used for accordions, dropdowns, and collapsible
+   panels:
+
+     .slideUp([duration], [callback])    — animates height to 0, then display:none
+     .slideDown([duration], [callback])  — animates height from 0 to its natural
+                                            value, restoring display
+     .slideToggle([duration], [callback])— slides down if hidden, up if visible
+
+     $('#panel').slideToggle(300);
+
+   Under the hood these are just convenience wrappers around .animate() with a
+   preset combination of height/overflow/margin/padding properties — you could
+   reproduce them manually with .animate({ height: 'toggle' }, 300), but the
+   named methods are clearer and less error-prone.
+
+────────────────────────────────────────────────────────────────────────────────
+Q40: How does .animate() work? What CSS properties can it animate, and what about easing?
+──────────────────────────────────────────────────────────────────────────────────────────
+A: .animate(properties, [duration], [easing], [callback]) animates one or more
+   NUMERIC CSS properties from their current value to the specified target
+   value over the given duration.
+
+     $('#box').animate({
+         left: '+=50px',     // relative animation (adds 50px to current left)
+         opacity: 0.5,
+         height: 'toggle'    // special "toggle" keyword — animates to the
+                              // opposite show/hidden state
+     }, 500, 'swing', function () {
+         console.log('animation complete');   // "this" = the raw DOM element
+     });
+
+   Rules and limitations:
+   • Only properties with numeric values can be animated this way (width,
+     height, opacity, margin/padding, top/left/right/bottom, font-size, etc.).
+     Non-numeric properties like "color" or "background-color" are NOT
+     animatable by jQuery core .animate() (color animation requires the
+     separate jQuery UI / jQuery Color plugin, since it needs to interpolate
+     between RGB channel values, not a single number).
+   • Property names use camelCase (e.g. fontSize, not font-size), same as .css().
+   • jQuery core ships only TWO easing functions out of the box: "swing"
+     (default — starts slow, speeds up, slows down again) and "linear"
+     (constant speed). Additional easings (easeInOutBounce, easeOutElastic,
+     etc.) require the jQuery UI Easing plugin or jQuery Easing plugin.
+   • The callback function's 'this' refers to the DOM element that finished
+     animating (each element in a multi-element set gets its own callback call).
+   • A plain-object "options map" form is also supported instead of positional
+     args: .animate(props, { duration: 500, easing: 'linear', complete: fn,
+     step: fn, queue: false }) — useful when you need finer control like a
+     "step" callback fired on every animation tick, or opting out of the
+     default animation queue.
+
+────────────────────────────────────────────────────────────────────────────────
+Q41: What does .stop() do, and how does jQuery's animation queue work?
+───────────────────────────────────────────────────────────────────────
+A: By default, jQuery queues effects/animations PER ELEMENT on an internal
+   queue named "fx" — if you call multiple animation methods on the same
+   element in a row, they run ONE AFTER ANOTHER (sequentially), not
+   simultaneously, even though the calls themselves return immediately:
+
+     $('#box').fadeOut(300).delay(200).fadeIn(300);
+     // fadeOut runs, then (after a 200ms pause added via .delay()) fadeIn runs
+
+   .stop([clearQueue], [jumpToEnd]) stops the CURRENTLY RUNNING animation on
+   the matched element(s):
+     .stop()               — stops the current animation where it is, leaves
+                              any QUEUED (not yet started) animations to run next
+     .stop(true)            — ALSO clears the queue, so nothing further runs
+     .stop(true, true)      — clears the queue AND jumps the current animation
+                              immediately to its end/final CSS values
+
+   .stop() is essential when a user can re-trigger an animation faster than it
+   completes (e.g. rapid hover in/out on a menu) — without it, animations pile
+   up in the queue and the element visibly "keeps animating" long after the
+   user stopped interacting, because every fadeOut()/fadeIn() call queues a NEW
+   animation rather than replacing the one in progress:
+
+     $('.menu').hover(
+         function () { $(this).stop(true, true).fadeIn(200); },
+         function () { $(this).stop(true, true).fadeOut(200); }
+     );
+
+   .delay(duration) inserts a pause into the queue (it does NOT use
+   setTimeout blocking — it's queue-based, so .stop() can also cancel a
+   pending .delay()). .clearQueue() empties the queue without touching the
+   currently running animation.
+
+────────────────────────────────────────────────────────────────────────────────
+Q42: How would you run two animations on the same element at the same time (in parallel) instead of sequentially?
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+A: Since jQuery's default "fx" queue runs animations on a given element one after
+   another, getting simultaneous animation requires either:
+
+   1. Combining properties into ONE .animate() call — the simplest approach,
+      since a single .animate() call animates all its listed properties
+      together in parallel:
+        $('#box').animate({ left: '200px', top: '100px', opacity: 0.5 }, 400);
+
+   2. Using a custom (non-default) queue name, or { queue: false }, so a second
+      .animate() call is NOT appended to the default "fx" queue and instead
+      starts immediately alongside whatever else is running:
+        $('#box').animate({ left: '200px' }, 400);
+        $('#box').animate({ opacity: 0.5 }, 400, function(){}, ); // still queued by default!
+        // to truly run in parallel on separate calls:
+        $('#box').animate({ opacity: 0.5 }, { duration: 400, queue: false });
+
+   Option 1 (one combined .animate() call) is almost always simpler and is the
+   idiomatic jQuery approach for simultaneous property animation.
+
+================================================================================
+SECTION 7: AJAX
+================================================================================
+
+Q43: What are the main options you can pass to $.ajax()?
+─────────────────────────────────────────────────────────
+A: $.ajax(url [, settings]) or $.ajax(settings) is the core, fully-configurable
+   Ajax method that every jQuery shorthand ($.get, $.post, $.getJSON) ultimately
+   delegates to. Common settings:
+
+     url          — target endpoint
+     method/type  — HTTP method: 'GET' (default), 'POST', 'PUT', 'DELETE', etc.
+                    ("type" is the legacy option name; "method" was added later
+                    as an alias — both still work)
+     data         — data to send: an object (serialized to a query string for
+                    GET, or to the request body for POST depending on
+                    processData/contentType), a query string, or an array
+     dataType     — expected response type: 'json', 'html', 'xml', 'text',
+                    'script', 'jsonp' — controls how jQuery parses the response
+     contentType  — Content-Type header of the OUTGOING request
+                    (default 'application/x-www-form-urlencoded; charset=UTF-8';
+                    set to 'application/json' when sending JSON.stringify(data))
+     headers      — object of extra request headers
+     timeout      — abort the request after N milliseconds
+     cache        — whether the browser is allowed to cache the response
+                    (default true for most dataTypes, false for script/jsonp)
+     processData  — whether to auto-serialize a data object into a query
+                    string (default true; set false when sending FormData/raw
+                    JSON body)
+     beforeSend(jqXHR, settings) — hook to modify the request before it's sent
+                    (e.g. attach an Authorization header)
+     success(data, textStatus, jqXHR) — legacy-style success callback
+     error(jqXHR, textStatus, errorThrown) — legacy-style error callback
+     complete(jqXHR, textStatus) — runs after success OR error
+     context      — value to bind as 'this' inside the callbacks
+     xhrFields    — e.g. { withCredentials: true } for cross-origin requests
+                    that need to send cookies
+
+     $.ajax({
+         url: '/api/products',
+         method: 'GET',
+         dataType: 'json',
+         data: { category: 'shoes' },
+         timeout: 5000,
+         headers: { 'X-Requested-With': 'XMLHttpRequest' }
+     })
+     .done(function (data) { console.log(data); })
+     .fail(function (jqXHR, status, err) { console.error(status, err); });
+
+   $.ajax() returns a jqXHR object — a superset of both the native XHR
+   interface AND a jQuery Promise/Deferred, so it supports both the legacy
+   success/error/complete callback options AND the modern .done()/.fail()/
+   .always()/.then() chained style.
+
+────────────────────────────────────────────────────────────────────────────────
+Q44: What are $.get(), $.post(), and $.getJSON()? How do they relate to $.ajax()?
+──────────────────────────────────────────────────────────────────────────────────
+A: These are convenience shorthand wrappers around $.ajax() for the most common
+   cases, trading configurability for brevity:
+
+     $.get(url [, data] [, success] [, dataType])
+     $.post(url [, data] [, success] [, dataType])
+     $.getJSON(url [, data] [, success])   // shorthand for $.get with
+                                            // dataType: 'json' preset
+
+     $.get('/api/products', { category: 'shoes' }, function (data) {
+         console.log(data);
+     });
+
+     // roughly equivalent to:
+     $.ajax({ url: '/api/products', method: 'GET', data: { category: 'shoes' },
+               success: function (data) { console.log(data); } });
+
+   All three still return a jqXHR (so .done()/.fail()/.always() work on them
+   too), they just don't expose the full settings object — use $.ajax()
+   directly whenever you need headers, timeout, error handling beyond a simple
+   success callback, or non-GET/POST methods (PUT, DELETE, PATCH have no
+   dedicated shorthand).
+
+────────────────────────────────────────────────────────────────────────────────
+Q45: What is the difference between .done()/.fail()/.always() and the legacy success/error/complete callbacks?
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+A: Both styles exist and both still work in modern jQuery, but they represent two
+   different eras of the API:
+
+     LEGACY (callback options passed INTO $.ajax()):
+       $.ajax({
+           url: '/api/x',
+           success: function (data) { ... },
+           error: function (jqXHR, status, err) { ... },
+           complete: function (jqXHR, status) { ... }
+       });
+
+     MODERN (chained onto the returned jqXHR, which is Promise/Deferred-like):
+       $.ajax('/api/x')
+         .done(function (data) { ... })          // fires on success
+         .fail(function (jqXHR, status, err) { ... })  // fires on failure
+         .always(function () { ... });            // fires either way
+
+   Key advantages of the .done()/.fail()/.always() (Deferred-based) style:
+   • You can attach MULTIPLE handlers of the same type — e.g. call .done()
+     twice to register two independent success callbacks — legacy success:
+     only accepts one function (or an array, less commonly used).
+   • Composable with $.when() to coordinate multiple simultaneous requests.
+   • Reads more naturally when chained, and interoperates with the
+     Promise-like .then(onSuccess, onFailure) method too.
+
+   jQuery 3.0 made the jqXHR's .then() method behave much closer to native
+   Promises/A+ semantics; .done()/.fail()/.always() retain jQuery's own
+   historical (non-spec) Deferred behavior (see the Deferred & Promises
+   section for the details of how they differ).
+
+────────────────────────────────────────────────────────────────────────────────
+Q46: What does $.ajaxSetup() do, and why is it generally discouraged?
+──────────────────────────────────────────────────────────────────────
+A: $.ajaxSetup(options) sets GLOBAL DEFAULT options that apply to every
+   subsequent $.ajax() call (and the $.get/$.post/$.getJSON shortcuts) made
+   anywhere in the page, unless a specific call overrides them:
+
+     $.ajaxSetup({
+         timeout: 5000,
+         headers: { 'X-Api-Key': 'abc123' }
+     });
+     // every later $.ajax() call now defaults to a 5s timeout + that header
+
+   Why it's generally discouraged in real applications:
+   • It's GLOBAL, mutable, shared state — any script on the page (your own
+     later code, or a third-party plugin) can silently change behavior for
+     ALL Ajax calls, including ones written by other developers unaware the
+     defaults changed, making bugs hard to trace.
+   • Testing and reasoning about a single $.ajax() call in isolation becomes
+     harder since its actual effective options depend on whatever
+     $.ajaxSetup() calls happened to run before it, in what order.
+   • Prefer explicit per-call options, or a small wrapper function/module that
+     centralizes shared config (e.g. attaching an auth header) instead of
+     mutating jQuery's global defaults.
+
+────────────────────────────────────────────────────────────────────────────────
+Q47: What do .serialize() and .serializeArray() do?
+────────────────────────────────────────────────────
+A: Both operate on a jQuery-wrapped <form> (or a set of form controls) and collect
+   the values of "successful" form controls — the same set of fields a real
+   HTML form submission would include (so disabled fields, unchecked
+   checkboxes/radios, and fields without a 'name' attribute are excluded).
+
+   .serialize() — returns a URL-encoded QUERY STRING, exactly like what would
+      be sent in a traditional form submission:
+        $('#myForm').serialize();
+        // "name=John&email=john%40example.com&subscribe=on"
+
+   .serializeArray() — returns an ARRAY of plain objects, each with 'name'
+      and 'value' keys, which is often more convenient for building a JSON
+      payload or inspecting individual fields programmatically:
+        $('#myForm').serializeArray();
+        // [ { name: "name", value: "John" }, { name: "email", value: "john@example.com" } ]
+
+   Typical Ajax form-submit pattern:
+     $('#myForm').on('submit', function (e) {
+         e.preventDefault();
+         $.ajax({
+             url: '/api/submit',
+             method: 'POST',
+             data: $(this).serialize()   // sent as application/x-www-form-urlencoded
+         });
+     });
+
+   Neither method includes <input type="file"> contents (file uploads need
+   FormData + processData:false/contentType:false with $.ajax()).
+
+────────────────────────────────────────────────────────────────────────────────
+Q48: How does jQuery handle JSON requests and responses?
+─────────────────────────────────────────────────────────
+A: For a JSON RESPONSE, setting dataType: 'json' (or letting jQuery auto-detect
+   it from the response's Content-Type header, e.g. application/json) makes
+   jQuery automatically parse the raw response text with JSON.parse() before
+   handing it to your success/.done() callback as a real JS object/array — you
+   don't need to call JSON.parse() yourself.
+
+   For a JSON REQUEST body, you must do two things explicitly, since jQuery's
+   default behavior is form-encoding, not JSON:
+     $.ajax({
+         url: '/api/products',
+         method: 'POST',
+         contentType: 'application/json',   // tell the server what we're sending
+         data: JSON.stringify({ name: 'Widget', price: 9.99 }),  // serialize yourself
+         dataType: 'json'                   // how to parse the RESPONSE
+     });
+
+   Common mistake: passing a plain JS object as 'data' without also setting
+   contentType/calling JSON.stringify() — by default jQuery will URL-encode the
+   object as form data (application/x-www-form-urlencoded) instead of sending
+   real JSON, which many JSON-only APIs will reject or mis-parse.
+
+   $.parseJSON(string) used to be jQuery's own JSON-parsing utility; it has
+   been DEPRECATED since jQuery 3.0 in favor of using the native, globally
+   available JSON.parse() directly (removed from jQuery entirely by 4.0).
+
+────────────────────────────────────────────────────────────────────────────────
+Q49: What should you know about CORS (Cross-Origin Resource Sharing) when using jQuery Ajax?
+─────────────────────────────────────────────────────────────────────────────────────────────
+A: jQuery's $.ajax() ultimately uses the browser's native XMLHttpRequest (or, in
+   modern versions, can be configured to use fetch under certain builds) —
+   which means it is subject to the SAME browser same-origin policy and CORS
+   rules as any other JS-initiated request. jQuery does not bypass or solve
+   CORS; the SERVER must opt in.
+
+   Key points:
+   • jQuery auto-detects "crossDomain" based on comparing protocol/host/port of
+     the request URL against the current page; you can also force it via the
+     'crossDomain' setting.
+   • For the browser to allow a cross-origin response to be read by JS, the
+     SERVER must respond with appropriate headers, e.g.
+     Access-Control-Allow-Origin: https://yourapp.com (or a wildcard '*' for any origin —
+     not usable together with credentials).
+   • To send cookies / HTTP auth on a cross-origin request, set
+     xhrFields: { withCredentials: true }, AND the server must respond with
+     Access-Control-Allow-Credentials: true and a SPECIFIC (non-wildcard)
+     Access-Control-Allow-Origin.
+   • "Preflight" OPTIONS requests are triggered automatically by the browser
+     (not by jQuery) for non-simple requests (custom headers, methods other
+     than GET/POST/HEAD, or contentType other than the 3 "simple" types) — the
+     server must handle OPTIONS and return the right CORS headers for the
+     real request to proceed.
+   • JSONP (dataType: 'jsonp') was jQuery's historical workaround for
+     cross-domain GET requests BEFORE CORS was widely supported — it works by
+     injecting a <script> tag (script tags aren't subject to same-origin
+     restrictions) and relies on the server wrapping its JSON response in a
+     callback function call. It only supports GET, offers no real error
+     handling, and is a security risk (the server can execute arbitrary script
+     in your page) — it's legacy and should be avoided in favor of CORS + fetch/
+     $.ajax on any modern API.
+
+────────────────────────────────────────────────────────────────────────────────
+Q50: How do you abort an in-flight Ajax request in jQuery?
+───────────────────────────────────────────────────────────
+A: $.ajax() (and the shorthand methods) return a jqXHR object, which exposes an
+   .abort() method (inherited from the native XHR interface):
+
+     var request = $.ajax({ url: '/api/search', data: { q: query } });
+
+     // if the user types again before the previous search finishes:
+     if (request) { request.abort(); }
+     request = $.ajax({ url: '/api/search', data: { q: newQuery } });
+
+   Aborting causes the request's .fail() handler to fire with a textStatus of
+   "abort" (rather than "error" or "timeout") — code that distinguishes error
+   causes should check for this to avoid showing a spurious "error" message to
+   the user for what was actually an intentional cancellation (e.g. in a
+   type-ahead/autocomplete search box).
+
+   Alternatively, the 'timeout' setting can auto-abort a request that takes
+   too long, surfacing textStatus "timeout" in .fail().
+
+================================================================================
+SECTION 8: DEFERRED AND PROMISES
+================================================================================
+
+Q51: What is $.Deferred(), and how do resolve/reject/notify work?
+──────────────────────────────────────────────────────────────────
+A: $.Deferred() creates a jQuery Deferred object — an object that represents a
+   unit of asynchronous (or even synchronous) work that will eventually
+   succeed or fail, similar in spirit to a native Promise's executor, but with
+   the resolve/reject controls exposed directly on the object itself (rather
+   than only inside a constructor callback).
+
+     function loadData() {
+         var deferred = $.Deferred();
+         setTimeout(function () {
+             var success = true;
+             if (success) {
+                 deferred.resolve({ id: 1, name: 'Widget' });   // fulfill
+             } else {
+                 deferred.reject('Failed to load');              // fail
+             }
+         }, 1000);
+         return deferred.promise();   // expose only the READ-ONLY interface
+     }
+
+     loadData()
+         .done(function (data) { console.log('got', data); })
+         .fail(function (err) { console.error(err); });
+
+   .resolve(value)   — marks the Deferred as successfully completed, running
+                       any .done()/.then() handlers with the given value(s).
+   .reject(reason)   — marks it as failed, running .fail()/.then() error
+                       handlers.
+   .notify(progress) — (rarely used today) reports incremental PROGRESS
+                       without resolving/rejecting yet, invoking any
+                       .progress() handlers — there is no equivalent concept
+                       in native Promises.
+
+   .promise() returns a restricted view of the Deferred that exposes only the
+   OBSERVER methods (.done/.fail/.then/.always/.progress) but NOT the
+   resolve/reject/notify methods — this is important API design: it lets the
+   creator of the Deferred control when/how it settles, while consumers can
+   only react to the outcome, not force it.
+
+────────────────────────────────────────────────────────────────────────────────
+Q52: What does $.when() do, and how does it compare to Promise.all()?
+──────────────────────────────────────────────────────────────────────
+A: $.when(deferred1, deferred2, ...) returns a new Promise-like object that
+   resolves once ALL of the given Deferreds/Promises have resolved (passing
+   through their resolved values), or rejects as soon as ANY ONE of them
+   rejects — conceptually similar to native Promise.all().
+
+     $.when(
+         $.ajax('/api/products'),
+         $.ajax('/api/categories')
+     ).done(function (productsResponse, categoriesResponse) {
+         // each argument is itself an array: [data, textStatus, jqXHR]
+         // when $.when() is given jqXHR objects specifically
+         var products = productsResponse[0];
+         var categories = categoriesResponse[0];
+     }).fail(function () {
+         console.error('at least one request failed');
+     });
+
+   Differences from Promise.all():
+   • Promise.all() always resolves its handler with a clean ARRAY of the
+     resolved values, one entry per input promise. $.when() with jqXHR objects
+     specifically gives each argument as a [data, textStatus, jqXHR] triplet
+     (because that's what a jqXHR "resolves" with) — you have to know to pull
+     index [0] to get just the data.
+   • $.when() called with a SINGLE Deferred just passes its value(s) straight
+     through (not wrapped in an array) — Promise.all() always wraps in an array
+     even for one input.
+   • $.when() called with NO arguments, or with plain (non-Deferred, non-thenable)
+     values, resolves immediately with those values, similar to how
+     Promise.resolve() would handle a plain value — but Promise.all([]) also
+     resolves immediately with an empty array, so behavior is broadly similar
+     at the edges, just not identical in shape.
+
+────────────────────────────────────────────────────────────────────────────────
+Q53: How do jQuery Promises differ from native ES6 Promises? Were they ever Promises/A+ compliant?
+───────────────────────────────────────────────────────────────────────────────────────────────────
+A: Historically (pre-jQuery 3.0), jQuery's Deferred/Promise implementation
+   deliberately did NOT follow the Promises/A+ specification, and differed from
+   native Promises in several concrete ways:
+
+     1. EXCEPTION HANDLING: in a native Promise, if a .then() handler throws an
+        exception, the resulting promise automatically becomes REJECTED with
+        that error. Pre-3.0 jQuery Deferreds did NOT do this — a thrown
+        exception inside a .done()/.then() handler would just propagate as an
+        uncaught JS exception rather than turning the Deferred into a rejected
+        state.
+
+     2. MULTIPLE VALUES: .resolve(a, b, c) can pass MULTIPLE arguments to
+        .done() handlers — native Promise.resolve() only ever carries a SINGLE
+        value.
+
+     3. SYNCHRONOUS vs ASYNCHRONOUS CALLBACKS: native Promise .then() callbacks
+        are ALWAYS invoked asynchronously (queued as a microtask), even if the
+        promise is already resolved at the time .then() is called. Older
+        jQuery Deferred .done()/.fail() handlers could fire SYNCHRONOUSLY if
+        the Deferred was already resolved/rejected by the time you attached the
+        handler — a subtle timing difference that could cause hard-to-reproduce
+        bugs when porting code between the two systems.
+
+     4. jQuery 3.0 rewrote jqXHR/Deferred's .then() method specifically to be
+        Promises/A+ compliant (proper exception-to-rejection conversion,
+        consistent async invocation) — BUT this compliance applies to .then()
+        specifically. The jQuery-native .done()/.fail()/.always()/.progress()
+        methods retain their original, non-spec jQuery-style behavior (multiple
+        resolve arguments, etc.) for backward compatibility.
+
+   Practical guidance: when interoperating with native async/await or other
+   Promise-based code, prefer chaining via .then() on a jQuery Deferred/jqXHR
+   (jQuery 3+), or explicitly convert with Promise.resolve($.ajax(...)), rather
+   than mixing .done()/.fail() style with native Promise chains.
+
+────────────────────────────────────────────────────────────────────────────────
+Q54: How do you convert a jQuery Deferred/jqXHR into a native Promise (for use with async/await)?
+──────────────────────────────────────────────────────────────────────────────────────────────────
+A: Since jQuery 3.0, a jqXHR (and any jQuery Promise) is "thenable" — it exposes a
+   spec-compliant-enough .then(onFulfilled, onRejected) method — which means
+   native Promise.resolve() can wrap it directly, letting you use it with
+   async/await:
+
+     function loadProducts() {
+         return Promise.resolve($.ajax({ url: '/api/products', dataType: 'json' }));
+     }
+
+     async function init() {
+         try {
+             var products = await loadProducts();
+             console.log(products);
+         } catch (err) {
+             console.error('failed to load', err);
+         }
+     }
+
+   Note the jqXHR's rejection value in a native 'catch'/await context will be
+   the jqXHR object itself (or [jqXHR, textStatus, errorThrown] shape depending
+   on how it rejected) rather than a clean Error object, so error-handling code
+   ported from fetch()-based patterns (which reject with real Error/Response
+   objects) usually needs adjustment when wrapping legacy $.ajax() calls this
+   way.
+
+────────────────────────────────────────────────────────────────────────────────
+Q55: What is the difference between .then() and .done()/.fail() on a jQuery Promise?
+─────────────────────────────────────────────────────────────────────────────────────
+A: .done(fn) / .fail(fn) / .always(fn)
+     • jQuery-native methods; each can be called MULTIPLE TIMES to register
+       several independent handlers of the same type.
+     • Do NOT support returning a new value/promise to CHAIN a transformation
+       the way .then() does — they're purely "fire and observe" callbacks that
+       return the SAME Deferred/Promise object (for further chaining of MORE
+       .done/.fail calls), not a new derived one.
+     • Retain jQuery's original (non-Promises/A+) semantics, e.g. multiple
+       resolve arguments passed through as-is, and swallow synchronous
+       exceptions thrown inside the handler rather than converting them to a
+       rejection.
+
+   .then(onFulfilled, onRejected, [onProgress])
+     • Since jQuery 3.0, behaves like a standards-compliant Promise .then():
+       returns a NEW promise whose resolution depends on what your
+       onFulfilled/onRejected handler returns (or throws), enabling proper
+       chained transformation:
+         getUser(id).then(function (user) { return getOrders(user.id); })
+                     .then(function (orders) { render(orders); })
+                     .catch(function (err) { showError(err); });
+     • A thrown exception inside a .then() handler correctly rejects the
+       resulting promise (Promises/A+ behavior), unlike .done()/.fail().
+
+   Guidance: use .then()/.catch() when you need to CHAIN/TRANSFORM async
+   results (and especially when interoperating with native Promise-based
+   code); use .done()/.fail() for simple, independent "just run this when it
+   resolves" observers, being mindful of the semantic differences above.
+
+================================================================================
+SECTION 9: UTILITIES
+================================================================================
+
+Q56: What does $.extend() do? What is the difference between a shallow and a deep merge?
+─────────────────────────────────────────────────────────────────────────────────────────
+A: $.extend([deep], target, obj1 [, obj2, ...]) merges the properties of one or
+   more source objects into a target object, and returns the (mutated) target.
+
+   SHALLOW merge (default — no leading true): only top-level properties are
+   copied; nested objects are copied BY REFERENCE, not cloned:
+     var defaults = { size: 'medium', theme: { color: 'blue' } };
+     var options = { theme: { color: 'red' } };
+     var settings = $.extend({}, defaults, options);
+     // settings.theme is now options.theme's object reference entirely
+     // (the whole "theme" key was overwritten, not merged) — nested "color"
+     // does not get selectively merged in a shallow extend
+
+   DEEP merge (pass true as the first argument): recursively merges nested
+   plain objects/arrays property-by-property instead of overwriting whole
+   sub-objects:
+     var settings = $.extend(true, {}, defaults, options);
+     // settings.theme = { color: 'red' } — deep-merged, and importantly this
+     // creates a brand NEW theme object rather than reusing options.theme's
+     // reference, so mutating settings.theme later won't affect options.theme
+
+   Common pattern — merging user options with plugin defaults without mutating
+   the defaults object itself (note the empty {} as the target so defaults
+   itself is never touched):
+     var settings = $.extend({}, defaults, userOptions);
+
+   A historical security note: jQuery's deep $.extend() had a well-known
+   "prototype pollution" vulnerability (a maliciously crafted source object
+   with a "__proto__" key could pollute Object.prototype for the whole page) —
+   this was patched in later jQuery 3.x releases. It's a good reminder to be
+   careful deep-merging objects that come from untrusted input (e.g. parsed
+   from a query string or JSON someone else controls).
+
+────────────────────────────────────────────────────────────────────────────────
+Q57: What is the difference between $.each() and native Array methods like forEach/map/for...of?
+─────────────────────────────────────────────────────────────────────────────────────────────────
+A: (This overlaps with the traversal section's .each() question — here's the
+   utility-level, non-jQuery-object comparison.)
+
+   $.each(collection, callback) works uniformly across arrays, array-like
+   objects (e.g. a NodeList, arguments object, or a jQuery object itself), and
+   plain objects (iterating enumerable own+inherited keys) — one function for
+   all three shapes, which was valuable before ES5/ES6 gave JS Array.forEach,
+   Object.keys/values/entries, and the for...of loop.
+
+     $.each(['a', 'b'], function (i, val) { });      // arrays
+     $.each({ x: 1, y: 2 }, function (key, val) { }); // plain objects
+     $.each(document.querySelectorAll('div'), function (i, el) { }); // array-like
+
+   Compare to modern native equivalents, which now cover all these cases with
+   less indirection and better performance:
+     ['a','b'].forEach(function (val, i) { });         // arrays (note arg order
+                                                         // is value FIRST, unlike $.each)
+     Object.entries({x:1,y:2}).forEach(([k,v]) => {});  // objects
+     for (const el of document.querySelectorAll('div')) { }  // any iterable
+
+   Practical differences:
+   • $.each's callback receives (index/key, value) — note the ORDER is
+     reversed compared to Array.forEach's (value, index).
+   • $.each supports early exit via 'return false' in the callback;
+     Array.forEach does NOT support breaking early (you'd need .some()/.every()
+     or a plain for loop); for...of DOES support native break/continue.
+   • In modern code (no legacy browser constraints), native iteration is
+     generally preferred — it's faster, doesn't require jQuery to be loaded,
+     and for...of gives real break/continue control.
+
+────────────────────────────────────────────────────────────────────────────────
+Q58: What does $.map() do, and how does it differ from Array.prototype.map()?
+──────────────────────────────────────────────────────────────────────────────
+A: $.map(arrayOrObject, function(value, indexOrKey) { return newValue; })
+   transforms each item, similar to Array.prototype.map(), but with two notable
+   behavioral differences:
+
+   1. FLATTENING: if the callback returns an ARRAY, $.map() flattens it one
+      level into the result — Array.prototype.map() does NOT do this (it would
+      produce a nested array of arrays); this makes $.map() behave a bit like
+      what's now called flatMap().
+   2. NULL/UNDEFINED REMOVAL: if the callback returns null or undefined, that
+      item is DROPPED from the resulting array entirely, rather than kept as a
+      null/undefined entry — Array.prototype.map() always preserves a 1-to-1
+      output length with the input, keeping null/undefined results in place.
+
+     $.map([1, 2, 3], function (val) {
+         return val % 2 === 0 ? null : val * 10;   // drop even numbers
+     });
+     // => [10, 30]  (length 2 — one entry was dropped)
+
+     [1, 2, 3].map(function (val) {
+         return val % 2 === 0 ? null : val * 10;
+     });
+     // => [10, null, 30]  (length 3 — native map always preserves length)
+
+   $.map() also works on plain objects (iterating key/value pairs), whereas
+   Array.prototype.map() only works on arrays/array-likes.
+
+────────────────────────────────────────────────────────────────────────────────
+Q59: What are $.inArray(), $.isArray(), and $.isFunction()? Are they still relevant?
+─────────────────────────────────────────────────────────────────────────────────────
+A: $.inArray(value, array [, fromIndex]) — returns the INDEX of value within
+   array, or -1 if not found (a boolean-friendly check is
+   "$.inArray(x, arr) !== -1"). Directly analogous to (and largely superseded
+   by) the native Array.prototype.indexOf(), which has been available since
+   ES5/IE9+:
+     $.inArray('b', ['a','b','c']);   // 1
+     ['a','b','c'].indexOf('b');      // 1 — prefer this in modern code
+
+   $.isArray(value) — checks whether a value is a real Array. DEPRECATED since
+   jQuery 3.2 in favor of the native, always-available Array.isArray(), and
+   REMOVED in jQuery 4.0.
+     Array.isArray(value);   // use this instead
+
+   $.isFunction(value) — checks whether a value is a function. DEPRECATED
+   since jQuery 3.3 in favor of a plain typeof check, and REMOVED in jQuery 4.0.
+     typeof value === 'function';   // use this instead
+
+   These are a great interview "gotcha" topic: they illustrate the general
+   jQuery 3.x → 4.x trend of stripping out utility functions that existed only
+   to paper over gaps in old JavaScript engines/old IE — once those gaps closed
+   (ES5 Array.isArray/indexOf, ES3+ typeof), the jQuery wrappers became pure
+   dead weight and were deprecated, then removed.
+
+────────────────────────────────────────────────────────────────────────────────
+Q60: What do $.trim() and $.type() do? What is their status in modern jQuery?
+──────────────────────────────────────────────────────────────────────────────
+A: $.trim(str) — removes leading and trailing whitespace from a string.
+   DEPRECATED since jQuery 3.5 in favor of the native String.prototype.trim()
+   (available since ES5 / IE9+), and REMOVED in jQuery 4.0.
+     $.trim('  hi  ');       // 'hi'   (legacy)
+     '  hi  '.trim();        // 'hi'   (preferred, native)
+
+   $.type(value) — returns a normalized, lowercase string describing a value's
+   internal [[Class]] — one of "string", "number", "boolean", "null",
+   "undefined", "array", "object", "function", "date", "regexp", "symbol",
+   "error", etc. It's more granular/reliable than the raw typeof operator
+   for distinguishing things like arrays vs plain objects vs null (all of which
+   typeof alone reports as "object"):
+     $.type([]);          // "array"
+     typeof [];            // "object" — less useful here
+     $.type(null);         // "null"
+     typeof null;          // "object" — famous JS quirk, $.type corrects it
+
+   $.type() still exists in jQuery 3.x without being marked for removal in the
+   way $.isArray/$.isFunction/$.trim are, though in modern code you'd typically
+   reach for Array.isArray(), Object.prototype.toString.call(), or explicit
+   "=== null"/typeof checks instead of pulling in jQuery just for type
+   detection.
+
+────────────────────────────────────────────────────────────────────────────────
+Q61: What does $.noop() do, and what other small utilities does jQuery provide?
+────────────────────────────────────────────────────────────────────────────────
+A: $.noop is simply a pre-defined empty function — equivalent to writing
+   function(){} yourself — provided as a convenient, reusable "do nothing"
+   placeholder, e.g. as a default callback option so calling code doesn't need
+   to null-check before invoking it:
+     function doSomething(callback) {
+         callback = callback || $.noop;
+         // ... work ...
+         callback();   // safe even if caller passed nothing
+     }
+
+   A few other small utilities worth knowing:
+     $.now()          — returns the current timestamp (Date.now()); DEPRECATED
+                         in later 3.x in favor of the native Date.now() (which
+                         didn't exist in the old-IE era jQuery originally
+                         targeted).
+     $.contains(container, contained) — checks whether one DOM element contains
+                         another as a descendant; largely superseded by the
+                         native Node.prototype.contains().
+     $.proxy(fn, context) — returns a new function with its "this" permanently
+                         bound to the given context; superseded by the native
+                         Function.prototype.bind().
+     $.holdReady(hold) — pauses/resumes the firing of the ready event, useful
+                         for asynchronously loading a plugin before the rest of
+                         your ready handlers run; deprecated/removed in modern
+                         versions in favor of controlling script loading order
+                         directly.
+
+   These are all good examples of the same theme: jQuery originally provided
+   polyfill-like conveniences for gaps in old JavaScript engines, and as native
+   equivalents matured (Date.now, Function.prototype.bind, Node.contains),
+   jQuery progressively deprecated its own versions.
+
+================================================================================
+SECTION 10: PLUGINS AND EXTENSIBILITY
+================================================================================
+
+Q62: How do you write a basic jQuery plugin?
+─────────────────────────────────────────────
+A: A jQuery plugin is simply a new method added to $.fn (jQuery.fn is an alias
+   for jQuery.prototype — every jQuery object you create via $(...) inherits
+   from it, so anything added to $.fn becomes callable on any jQuery selection):
+
+     (function ($) {
+         $.fn.highlight = function (color) {
+             color = color || 'yellow';
+             return this.each(function () {
+                 $(this).css('background-color', color);
+             });
+         };
+     })(jQuery);
+
+     // usage, exactly like a built-in method:
+     $('.important').highlight('orange');
+
+   Key structural points:
+   • Wrapped in an IIFE that takes jQuery as a parameter aliased to $ — this
+     protects the plugin from a page where $ might be reassigned to something
+     else (see noConflict), and avoids leaking any internal helper variables
+     into the global scope.
+   • Defined once, on $.fn, not on individual jQuery objects.
+   • Returns this.each(...) — see the chainability question below for why
+     this matters.
+
+────────────────────────────────────────────────────────────────────────────────
+Q63: What conventions should a well-behaved jQuery plugin follow?
+──────────────────────────────────────────────────────────────────
+A: 1. Namespace under $.fn with a distinct, unlikely-to-collide name — avoid
+      generic names like $.fn.init or $.fn.data that might clash with jQuery
+      itself or another plugin.
+   2. Accept an OPTIONS OBJECT and merge it with sane defaults via $.extend(),
+      rather than a long list of positional parameters — this scales much
+      better as the plugin grows and makes call sites self-documenting:
+        $.fn.myPlugin = function (options) {
+            var settings = $.extend({
+                color: 'red',
+                duration: 400
+            }, options);
+            return this.each(function () { /* use settings.color, etc */ });
+        };
+        $('.box').myPlugin({ duration: 800 });   // color falls back to default
+   3. Expose configurable defaults on the plugin itself so consumers can
+      override them GLOBALLY without passing options every call:
+        $.fn.myPlugin.defaults = { color: 'red', duration: 400 };
+        $.fn.myPlugin = function (options) {
+            var settings = $.extend({}, $.fn.myPlugin.defaults, options);
+            // ...
+        };
+   4. Avoid polluting the global namespace — keep helper functions inside the
+      IIFE closure, not as separate global functions.
+   5. Store per-element STATE using .data() (namespaced, e.g.
+      $(this).data('myPlugin')) rather than external variables/arrays keyed by
+      index, so state travels with the element and is cleaned up automatically
+      if the element is removed via .remove().
+   6. Guard against double-initialization — check whether
+      $(this).data('myPlugin') is already set and bail out early, so calling
+      the plugin twice on the same element doesn't double-bind handlers.
+   7. Always operate on "this" (the jQuery object the plugin was called on)
+      rather than re-querying the DOM inside the plugin, and always return it
+      (or this.each(...)'s result) to preserve chainability.
+
+────────────────────────────────────────────────────────────────────────────────
+Q64: Why do plugins typically return this.each(function(){...}) instead of just doing the work directly?
+─────────────────────────────────────────────────────────────────────────────────────────────────────────
+A: Two combined reasons: SUPPORTING MULTIPLE ELEMENTS correctly, and preserving
+   CHAINABILITY.
+
+   A jQuery selection can match MULTIPLE elements ($('.box') might match 10
+   elements). If a plugin just operates on "this" directly assuming a single
+   element, it will misbehave or silently only affect the first one. Using
+   this.each(function(){...}) guarantees the plugin's logic runs once per
+   matched element, with "this" correctly rebound to each individual raw DOM
+   element inside the callback (so $(this) inside refers to just that one
+   element).
+
+   Returning the result of this.each(...) matters because .each() itself
+   returns the ORIGINAL jQuery object ("this") — by returning that value from
+   the plugin function, callers can continue chaining further jQuery methods
+   after calling your plugin, exactly like a built-in method:
+
+     $('.box').highlight('yellow').fadeOut(400).remove();
+     //        ^ your plugin        ^ built-in  ^ built-in — all chainable
+     //          because highlight() returned this.each(...), i.e. the jQuery object
+
+   If your plugin instead returned undefined (e.g. forgot the "return"
+   keyword), the chain would break immediately after your plugin call with a
+   "Cannot read properties of undefined" error on the next method call.
+
+================================================================================
+SECTION 11: PERFORMANCE AND BEST PRACTICES
+================================================================================
+
+Q65: Why should you cache jQuery selections in variables instead of re-querying the DOM?
+─────────────────────────────────────────────────────────────────────────────────────────
+A: Every call to $(selector) walks the DOM (via querySelectorAll or jQuery's own
+   selector engine) to build a brand-new jQuery object — even if you just made
+   the exact same call a moment ago. Repeating a selector inside a loop, or
+   across several statements in a function, means paying that DOM-traversal
+   cost over and over for no reason.
+
+     // BAD — queries the DOM 3 separate times
+     $('#box').css('color', 'red');
+     $('#box').fadeIn();
+     $('#box').on('click', handler);
+
+     // GOOD — one query, reused via a cached variable
+     var $box = $('#box');
+     $box.css('color', 'red').fadeIn().on('click', handler);
+     // (also demonstrates chaining to combine the three calls into one)
+
+   This matters even more inside loops or frequently-invoked event handlers
+   (e.g. scroll/resize/mousemove handlers, which can fire dozens of times per
+   second) — re-selecting the same elements on every iteration/invocation adds
+   up quickly. A common convention is prefixing cached jQuery variables with a
+   "$" (e.g. $box, $list) purely as a naming convention to signal "this holds a
+   jQuery object, not a raw value or DOM element".
+
+────────────────────────────────────────────────────────────────────────────────
+Q66: What does it mean to 'minimize DOM access' and avoid layout thrashing? How does jQuery help or hurt here?
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+A: Reading certain DOM properties (offsetWidth, offsetHeight, getBoundingClientRect,
+   getComputedStyle/.css() for layout properties, scrollTop, etc.) can force the
+   browser to synchronously recalculate layout ("reflow") if styles were changed
+   since the last layout pass. Interleaving READS and WRITES to layout-affecting
+   properties in a loop causes "layout thrashing" — the browser is forced to
+   recompute layout repeatedly instead of batching the work once.
+
+     // BAD — read, write, read, write... forces a reflow on every iteration
+     $('.box').each(function () {
+         var h = $(this).height();          // READ (may force reflow)
+         $(this).css('height', h + 10);       // WRITE (invalidates layout)
+     });
+
+     // BETTER — batch all reads first, then all writes
+     var heights = $('.box').map(function () { return $(this).height(); }).get();
+     $('.box').each(function (i) {
+         $(this).css('height', heights[i] + 10);
+     });
+
+   Beyond read/write batching, minimizing DOM access generally means:
+   • Building HTML as a string (or DocumentFragment) and inserting it in ONE
+     .append()/.html() call, instead of appending elements one at a time in a
+     loop (each insertion can trigger style recalculation/layout/paint work).
+   • Detaching an element from the DOM (.detach()) before doing many
+     manipulations on it, then reattaching once, so intermediate changes don't
+     each trigger a live-DOM reflow (see the DOM Manipulation section).
+   • Avoiding unnecessary .css()/.width()/.height() calls inside hot loops or
+     frequently-firing event handlers.
+
+   jQuery doesn't automatically batch this for you — the convenience of its API
+   can actually make it easier to accidentally write reflow-heavy code (e.g. a
+   one-line .each() that reads then writes layout properties), so being
+   deliberate about batching reads/writes is on the developer, not the library.
+
+────────────────────────────────────────────────────────────────────────────────
+Q67: Why is event delegation recommended for large or dynamic lists specifically, from a performance angle?
+────────────────────────────────────────────────────────────────────────────────────────────────────────────
+A: Binding a DIRECT handler to every row in a large list means allocating one
+   listener object PER ELEMENT — for a list of 5,000 rows with a click handler,
+   that's 5,000 separate bound functions consuming memory, and 5,000 handlers
+   to individually clean up if the rows are removed without using jQuery's
+   .remove() (a common source of memory leaks — see the Advanced section).
+
+     // BAD for a large/dynamic list — one handler per row
+     $('.row').on('click', handler);   // 5,000 bindings for 5,000 rows
+
+     // GOOD — ONE handler total, on a stable ancestor
+     $('#list').on('click', '.row', handler);
+
+   Benefits of delegating to a single ancestor handler:
+   • Dramatically less memory overhead (1 handler instead of N).
+   • Faster INITIAL setup — binding 1 handler is obviously cheaper than binding
+     thousands, which matters for perceived page-load/render performance.
+   • Automatically covers rows added LATER (e.g. via infinite scroll/pagination/
+     ajax-appended content) with zero extra binding code, since the ancestor
+     was already listening.
+   • Nothing to clean up per-row when rows are removed — the single delegated
+     handler on the ancestor is unaffected by descendants coming and going.
+
+   The one tradeoff: each click event now needs to bubble up to the ancestor
+   and be matched against the delegated selector, which is marginally more
+   per-click work than a direct handler — but this cost is negligible compared
+   to the memory/setup savings for anything beyond a handful of elements.
+
+────────────────────────────────────────────────────────────────────────────────
+Q68: Why might you detach an element from the DOM before doing heavy manipulation on it?
+─────────────────────────────────────────────────────────────────────────────────────────
+A: Any element currently attached to the live DOM is part of the page's render
+   tree — modifying it (adding children, changing classes/styles, reordering
+   rows) can trigger the browser to recompute layout and repaint, potentially
+   on every individual change if reads and writes are interleaved (see layout
+   thrashing above).
+
+   .detach() removes the element from the DOM (so it's no longer part of the
+   render tree, and cheap to mutate in memory) while preserving jQuery's
+   attached data and event handlers (unlike a raw removeChild, and unlike
+   .remove() which discards the associated data/events) — perfect for
+   "pull out, do a lot of work, put back" patterns:
+
+     var $table = $('#bigTable').detach();   // out of the DOM — mutations are free
+     // ... sort rows, filter, re-render hundreds of <tr> elements in memory ...
+     $table.appendTo('#container');           // ONE reflow when reattached,
+                                               // handlers still intact
+
+   This turns what could be hundreds of incremental reflows (one per DOM edit)
+   into effectively ONE reflow (when the fully-updated subtree is reattached),
+   which can be the difference between a janky, multi-second re-render and an
+   instant-feeling update on large tables/lists.
+
+────────────────────────────────────────────────────────────────────────────────
+Q69: What's the performance difference between ID selectors and class/tag selectors?
+─────────────────────────────────────────────────────────────────────────────────────
+A: ID selectors ($('#id')) are the fastest jQuery/CSS selector by a wide margin,
+   because they map almost directly onto the browser's highly optimized native
+   document.getElementById(), which can look up an element in effectively
+   constant time using an internal ID map — there's no need to scan/filter a
+   larger candidate set.
+
+   Class ($('.item')) and tag ($('div')) selectors are slower, because the
+   browser (via getElementsByClassName/getElementsByTagName or
+   querySelectorAll) generally has to gather a larger set of CANDIDATE
+   elements and, for compound/descendant selectors, filter them against the
+   rest of the selector — the more elements share that class/tag, and the more
+   complex the selector, the more work involved.
+
+   Practical guidance:
+     $('#header')                  // fastest — direct ID lookup
+     $('.item')                    // fast — native getElementsByClassName-backed
+     $('div')                      // fast — native getElementsByTagName-backed
+     $('#list .item')              // good — scoped from a fast ID root
+     $('div.container ul li a.link') // slower — long compound/descendant chain,
+                                       // more candidates to filter through
+     $('.item:visible')            // slower still — :visible is a jQuery-only
+                                    // pseudo-selector requiring JS-level filtering
+                                    // AFTER the native query runs (see Selectors section)
+
+   In modern browsers the ABSOLUTE difference is often microseconds and rarely
+   matters for a one-off selection — but it adds up meaningfully inside hot
+   loops, frequently-firing event handlers, or when selecting from a very large
+   DOM (thousands of elements), which is where these rules of thumb actually
+   start to matter in practice.
+
+================================================================================
+SECTION 12: JQUERY VS MODERN JAVASCRIPT / FRAMEWORKS
+================================================================================
+
+Q70: What are the vanilla JavaScript equivalents of common jQuery methods?
+───────────────────────────────────────────────────────────────────────────
+A: jQuery task              jQuery                        Vanilla JS equivalent
+   ----------------------  ----------------------------  --------------------------------
+   Select one element      $('#id')                      document.getElementById('id')
+   Select multiple         $('.item')                     document.querySelectorAll('.item')
+   Select first match      $('.item').first()             document.querySelector('.item')
+   Add/remove class        .addClass()/.removeClass()     el.classList.add()/.remove()
+   Toggle class             .toggleClass()                 el.classList.toggle()
+   Has class                .hasClass()                    el.classList.contains()
+   Get/set HTML             .html()                        el.innerHTML
+   Get/set text             .text()                        el.textContent
+   Get/set attribute        .attr()                        el.getAttribute()/setAttribute()
+   Get/set CSS property     .css()                         el.style.prop /
+                                                            getComputedStyle(el)
+   Bind an event            .on('click', fn)                el.addEventListener('click', fn)
+   Remove an event          .off('click', fn)               el.removeEventListener('click', fn)
+   Event delegation         .on('click', sel, fn)            manual: check e.target.closest(sel)
+                                                            inside a listener on the ancestor
+   Ajax request             $.ajax() / $.get()              fetch(url)
+   Traverse to parent       .parent() / .closest()          el.parentElement / el.closest()
+   Traverse to children     .children()                     el.children
+   Traverse siblings        .siblings()                     manual, or el.parentElement.children
+                                                            filtered to exclude el
+   Merge objects            $.extend()                      Object.assign() / spread { ...a, ...b }
+   Iterate a collection     $.each() / .each()               Array.forEach() / for...of
+   Document ready           $(document).ready(fn)            document.addEventListener(
+                                                            'DOMContentLoaded', fn) (or a
+                                                            <script defer> at the end of <body>)
+   Show/hide                .show()/.hide()                  el.style.display = '' / 'none'
+   Animate                  .animate() / .fadeIn()           CSS transitions/animations, or
+                                                            the Web Animations API (el.animate())
+
+   None of these require jQuery to be loaded, and all are natively supported in
+   every evergreen browser today — which is the core reason jQuery's role has
+   shrunk: most of what it uniquely offered in 2006 is now built into the
+   platform itself.
+
+────────────────────────────────────────────────────────────────────────────────
+Q71: Why has jQuery's usage declined in new projects?
+──────────────────────────────────────────────────────
+A: Several converging trends explain the decline, none of which mean jQuery
+   became "bad" — the surrounding ecosystem simply closed most of the gaps it
+   was created to fill:
+
+   1. BROWSER STANDARDIZATION: querySelectorAll, classList, fetch,
+      addEventListener, and the Promise/async-await model are now consistently
+      implemented across all evergreen browsers. The cross-browser
+      inconsistencies (particularly old IE's non-standard event/DOM/XHR APIs)
+      that motivated jQuery's creation are essentially gone — there's no old IE
+      left to support in the vast majority of projects.
+   2. COMPONENT-BASED / REACTIVE FRAMEWORKS: React, Vue, Angular, and Svelte
+      manage the DOM declaratively through a virtual DOM (or fine-grained
+      reactivity) rather than direct imperative manipulation. Reaching into the
+      DOM directly with jQuery inside a React/Vue component is actively an
+      ANTI-PATTERN, because it fights the framework's own reconciliation and
+      can cause the framework's internal representation of the DOM to get out
+      of sync with reality, leading to subtle bugs.
+   3. BUNDLE SIZE: jQuery (even the slim build) adds real weight to a bundle
+      that modern build tooling and performance budgets increasingly scrutinize
+      — when the same task can be done with a few lines of native JS, adding a
+      ~30kb+ dependency is a harder sell than it was in 2010.
+   4. MODERN JS ERGONOMICS: arrow functions, template literals, destructuring,
+      spread/rest, Promise/async-await, and array methods (map/filter/reduce)
+      cover much of the ergonomic convenience jQuery's API historically
+      provided over "old" pre-ES5 JavaScript.
+   5. TOOLING SHIFT: the rise of npm-based build pipelines (webpack, Vite)
+      makes it just as easy to pull in a small, focused utility (or nothing at
+      all) as it is to add jQuery, removing jQuery's old "just drop in one
+      script tag" convenience advantage for new, tooled projects.
+
+────────────────────────────────────────────────────────────────────────────────
+Q72: When is jQuery still a reasonable or even good choice today?
+──────────────────────────────────────────────────────────────────
+A: 1. LEGACY CODEBASES: large existing applications (older ASP.NET MVC apps,
+      older Rails/Django server-rendered apps, enterprise intranets) built
+      around jQuery, where a rewrite isn't justified purely to remove it — the
+      pragmatic choice is usually to keep it and add incremental improvements
+      rather than a risky full rewrite.
+   2. WORDPRESS AND MANY CMS/PLUGIN ECOSYSTEMS: WordPress core still ships and
+      relies on jQuery, and a huge number of themes/plugins assume it's
+      present — building for that ecosystem effectively requires it.
+   3. MULTI-PAGE, SERVER-RENDERED SITES WITH LIGHT INTERACTIVITY: a
+      traditional server-rendered site (no SPA, no build pipeline) that just
+      needs a dropdown menu, a modal, some form validation, or an Ajax
+      form-submit doesn't need a framework's overhead — a single <script>
+      tag and a few jQuery calls remain a fast, low-ceremony way to add that.
+   4. THIRD-PARTY PLUGIN ECOSYSTEM: mature, feature-rich plugins like
+      DataTables, Select2, and various date pickers are built on top of
+      jQuery; if a project needs exactly what one of these provides, pulling
+      in jQuery as a dependency of that plugin is often the pragmatic choice
+      over reimplementing the same functionality from scratch.
+   5. BROWSER EXTENSIONS / QUICK SCRIPTS / EMBEDDABLE WIDGETS: small,
+      standalone scripts injected into arbitrary third-party pages sometimes
+      still reach for jQuery for its resilience across unknown page
+      environments (though noConflict-style discipline is needed here).
+
+   The honest interview answer: reach for jQuery when working within an
+   existing jQuery codebase or its plugin ecosystem, or for small,
+   non-component-based, server-rendered projects; reach for native JS (or a
+   framework) for anything new that involves complex, stateful UI.
+
+────────────────────────────────────────────────────────────────────────────────
+Q73: What are the meaningful differences between jQuery 1.x, 2.x, 3.x, and 4.x?
+────────────────────────────────────────────────────────────────────────────────
+A: jQuery 1.x
+     • The original line; supports old IE (IE 6/7/8) via extensive
+       browser-branching internals.
+     • Still received compatibility patches long after 2.x/3.x existed, for
+       projects that genuinely needed old-IE support.
+
+   jQuery 2.x
+     • Same PUBLIC API as the corresponding 1.x release, but DROPS support for
+       old IE (IE 6/7/8) — smaller and somewhat faster internally because it no
+       longer needs those workarounds.
+     • Choose 2.x historically only if you needed a smaller file and could
+       guarantee no old-IE users; otherwise 1.x and 2.x were kept in sync
+       API-wise so migrating between them was just a build/support decision,
+       not a code-rewrite decision.
+
+   jQuery 3.x
+     • UNIFIED the 1.x/2.x lines into one codebase using feature detection
+       instead of hard version branches.
+     • Rewrote Deferred/jqXHR internals to make .then() much closer to
+       Promises/A+ compliant (see the Deferred & Promises section).
+     • Introduced the SLIM build (jquery.slim.js) — excludes ajax and effects
+       modules and deprecated event aliases, for projects using fetch()/CSS
+       transitions instead.
+     • Switched most animations to use requestAnimationFrame internally for
+       smoother timing.
+     • Removed/changed several long-deprecated APIs (e.g. the "ready" event
+       alias, jQuery.fn.context/.selector properties) and began formally
+       deprecating .bind()/.unbind()/.delegate()/.undelegate(),
+       $.isArray()/$.isFunction(), etc. in favor of their .on()/.off() and
+       native equivalents.
+
+   jQuery 4.x
+     • Continues modernizing internals, drops remaining legacy-browser
+       workarounds, and REMOVES the APIs that 3.x had only deprecated:
+       .bind()/.unbind()/.delegate()/.undelegate(), $.isArray(),
+       $.isFunction(), $.trim(), and similar old-IE-era utility shims — the
+       expectation is that projects use .on()/.off() and native JS equivalents
+       (Array.isArray, typeof, String.prototype.trim) instead.
+     • Targets only modern, evergreen browsers.
+
+   Quick migration mental model: 1.x → 2.x is a support-matrix decision (same
+   API); 2.x/1.x → 3.x is mostly safe but should run through jQuery Migrate to
+   catch deprecated-API usage; 3.x → 4.x requires actually removing any
+   remaining .bind()/.delegate()/$.isArray()-style legacy calls found by that
+   migration check, since 4.x deletes them outright.
+
+────────────────────────────────────────────────────────────────────────────────
+Q74: What is the jQuery Migrate plugin, and when would you use it?
+───────────────────────────────────────────────────────────────────
+A: jQuery Migrate is a separate, official companion plugin (github.com/jquery/
+   jquery-migrate) designed to smooth over UPGRADES between major jQuery
+   versions. It restores some removed/changed APIs as compatibility shims and
+   — critically — logs CONSOLE WARNINGS whenever your code uses a deprecated
+   or removed feature, telling you exactly what needs to change.
+
+   Typical workflow when upgrading an old codebase (e.g. jQuery 1.x → 3.x, or
+   3.x → 4.x):
+     1. Add jquery-migrate alongside the NEW jQuery version (not the old one).
+     2. Run the application/site through its normal usage/test suite with the
+        browser console open.
+     3. Fix each deprecation warning Migrate logs (e.g. "JQMIGRATE: jQuery.
+        isArray is deprecated" → replace with Array.isArray()).
+     4. Once the console is clean of warnings, jQuery Migrate can be removed
+        entirely — it was only a scaffolding aid during the upgrade, not
+        something to ship long-term in production.
+
+   This is the standard, low-risk way to move a large legacy jQuery codebase
+   forward across major versions without having to manually audit every file
+   for deprecated API usage by hand.
+
+================================================================================
+SECTION 13: ADVANCED / TRICKY TOPICS
+================================================================================
+
+Q75: Why does $(this) matter inside jQuery callbacks, and how do arrow functions change this?
+──────────────────────────────────────────────────────────────────────────────────────────────
+A: Inside jQuery-invoked callbacks (event handlers passed to .on(), iteration
+   callbacks passed to .each(), animation completion callbacks, etc.), jQuery
+   deliberately calls your function with "this" bound to the relevant raw DOM
+   element — NOT a jQuery object. To use jQuery methods on that element inside
+   the callback, you must wrap it: $(this).
+
+     $('.item').on('click', function () {
+         $(this).toggleClass('selected');   // "this" = the clicked raw <li>/<div>
+         // this.toggleClass(...)  ← ERROR, raw DOM elements have no such method
+     });
+
+   ARROW FUNCTIONS do not have their own "this" — they inherit "this" LEXICALLY
+   from the enclosing scope at the time they're defined, rather than being
+   rebound based on how they're invoked. This means using an arrow function as
+   a jQuery event handler BREAKS the expected "this = the element" behavior:
+
+     $('.item').on('click', () => {
+         console.log(this);          // NOT the clicked element — whatever
+         $(this).toggleClass('x');   // "this" was in the surrounding scope
+                                      // (often "window" or a class instance,
+                                      // NOT the clicked <li>)
+     });
+
+   To get the actual element inside an arrow-function handler, use
+   event.currentTarget (the element the handler is bound to) or event.target
+   (the element that was actually clicked, which may be a descendant of
+   currentTarget in a delegated handler):
+
+     $('.item').on('click', (event) => {
+         $(event.currentTarget).toggleClass('selected');   // works correctly
+     });
+
+────────────────────────────────────────────────────────────────────────────────
+Q76: What is the classic closure-in-a-loop bug with jQuery event handlers, and how do you fix it?
+──────────────────────────────────────────────────────────────────────────────────────────────────
+A: This is a general JavaScript closure problem (not jQuery-specific), but it
+   shows up constantly in jQuery code that binds handlers inside a loop:
+
+     // BUGGY — using "var"
+     for (var i = 0; i < items.length; i++) {
+         $('#btn' + i).on('click', function () {
+             console.log('clicked button', i);   // logs the SAME final value
+                                                    // of i for every button,
+                                                    // e.g. always "items.length"
+         });
+     }
+
+   Why it happens: "var" is FUNCTION-scoped, not block-scoped, so there is only
+   ONE shared "i" variable for the entire loop. All the click handler closures
+   capture a REFERENCE to that same variable, not a snapshot of its value at
+   binding time — by the time any handler actually fires (after the loop has
+   already finished running), "i" holds its final post-loop value.
+
+   FIX 1 — use "let" instead of "var" (block-scoped; ES6+): "let" creates a
+   FRESH binding of i for each loop iteration, so each closure captures its
+   own distinct value:
+     for (let i = 0; i < items.length; i++) {
+         $('#btn' + i).on('click', function () {
+             console.log('clicked button', i);   // correct — each closure has
+                                                    // its own "i"
+         });
+     }
+
+   FIX 2 — wrap in an IIFE to create a new scope per iteration (the classic
+   pre-ES6 fix):
+     for (var i = 0; i < items.length; i++) {
+         (function (capturedI) {
+             $('#btn' + capturedI).on('click', function () {
+                 console.log('clicked button', capturedI);
+             });
+         })(i);
+     }
+
+   FIX 3 (idiomatic jQuery) — use $.each() or .each(), whose callback runs as
+   a fresh function invocation per item, naturally giving each iteration its
+   own "index" parameter with no closure trap:
+     $('.btn').each(function (index) {
+         $(this).on('click', function () {
+             console.log('clicked button', index);   // correct — fresh
+                                                        // "index" per element
+         });
+     });
+
+   FIX 4 (most robust in practice) — avoid capturing loop state entirely by
+   reading data OFF the element itself (via .data()/data-* or .index()) inside
+   the handler, rather than relying on a captured loop variable at all.
+
+────────────────────────────────────────────────────────────────────────────────
+Q77: What is the difference between .data() and reading HTML5 data-* attributes directly? Does .data() do type coercion?
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+A: $(el).data(key) reads a jquery-managed value. The FIRST time .data(key) (or
+   .data(), no args) is called on an element, jQuery lazily reads any matching
+   data-key attribute(s) from the markup and caches the result in its OWN
+   internal data store (not on the DOM element itself) — subsequent reads come
+   from that internal cache, not from re-parsing the attribute.
+
+     <div id="box" data-count="5" data-active="true" data-config='{"a":1}'></div>
+
+     $('#box').data('count');    // 5        — NUMBER, not the string "5"
+     $('#box').data('active');   // true     — BOOLEAN, not the string "true"
+     $('#box').data('config');   // {a: 1}   — parsed OBJECT, not a raw string
+
+   .data() automatically performs TYPE COERCION on the attribute string: it
+   converts "true"/"false" to real booleans, numeric-looking strings to real
+   numbers, and JSON-looking strings (objects/arrays) via JSON.parse() — plain
+   non-JSON, non-boolean, non-numeric strings are left as-is.
+
+   Attribute NAME CONVERSION: data-user-id in markup maps to camelCase
+   .data('userId') when read — same convention as the native HTML5
+   el.dataset.userId.
+
+   THE CLASSIC GOTCHA: calling $(el).data('key', newValue) updates jQuery's
+   INTERNAL cache ONLY — it does NOT write the value back to the actual
+   data-key attribute in the DOM. So after doing this:
+
+     $('#box').data('count', 99);
+     $('#box').data('count');               // 99   (from jQuery's internal cache)
+     $('#box').attr('data-count');           // "5"  (unchanged — still the
+                                              //       original markup value!)
+     document.getElementById('box').dataset.count;  // "5" (native dataset also
+                                              //       unaffected)
+
+   This trips people up constantly: .data() as a SETTER is a JS-only, jQuery-
+   internal value store for that element's lifetime — not a way to mutate the
+   markup. If you need the actual attribute updated (e.g. because other,
+   non-jQuery code reads it via .dataset), you must call .attr('data-count', 99)
+   explicitly as well.
+
+────────────────────────────────────────────────────────────────────────────────
+Q78: How can unremoved jQuery event handlers cause memory leaks, and how does jQuery's own removal API help?
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+A: A bound event handler is a closure — it can hold references to variables,
+   DOM elements, or large objects from its enclosing scope, keeping them alive
+   in memory for as long as the handler itself is reachable/referenced.
+
+   The classic leak scenario: an element is removed from the page using a RAW
+   DOM operation (not jQuery's own removal methods) while it still has jQuery
+   event handlers and/or .data() attached:
+
+     var el = document.getElementById('box');
+     el.parentNode.removeChild(el);   // raw DOM removal
+     // el is gone from the visible page, BUT jQuery's internal data/event
+     // registry (jQuery.cache / jQuery._data historically) may still hold a
+     // reference keyed to that element, and any handler closures attached to
+     // it (plus whatever THEY reference) stay reachable and un-garbage-collected
+
+   jQuery's OWN .remove() method avoids this by explicitly cleaning up its
+   internal data/event registry for the removed element (and all of its
+   descendants) as part of removing it:
+     $('#box').remove();   // removes from DOM AND cleans jQuery's internal
+                            // data/event references — safe, no leak
+
+   Other leak-prevention practices:
+   • Call .off() to explicitly unbind handlers you no longer need, especially
+     ones bound to long-lived targets like window/document (e.g. a
+     scroll/resize handler set up by a component that gets destroyed — if you
+     never call $(window).off('scroll.myComponent'), that handler (and
+     whatever it closes over) lives for the lifetime of the page).
+   • Prefer EVENT DELEGATION for large/dynamic lists (see Performance section)
+     — a single handler on a stable ancestor has nothing to leak when
+     individual rows come and go, versus per-row handlers that each need
+     individual cleanup.
+   • Use NAMESPACED events (.on('click.myWidget', fn) / .off('.myWidget')) so a
+     component can reliably remove exactly its own handlers on teardown without
+     accidentally leaving others behind (or removing handlers it doesn't own).
+   • .detach() intentionally PRESERVES data/events (by design, for the
+     "temporarily pull out, then reattach" pattern) — if you detach an element
+     and then simply drop your only reference to it without reattaching, be
+     aware its handlers/data are still intact and referenced internally; if you
+     genuinely want it gone for good, call .remove() instead.
+
+────────────────────────────────────────────────────────────────────────────────
+Q79: What is the difference between .width(), .css('width'), and .outerWidth()?
+────────────────────────────────────────────────────────────────────────────────
+A: .width([value])
+     • Gets/sets the CONTENT width only — excludes padding, border, and
+       margin — always returned as a plain, unitless NUMBER (assumed pixels),
+       not a string with "px".
+     • jQuery NORMALIZES this to always represent content-box width, REGARDLESS
+       of whether the element has box-sizing: border-box or content-box set in
+       CSS — jQuery internally adjusts the raw computed value to strip out
+       padding/border when necessary so .width() is consistent either way.
+
+   .css('width')
+     • Gets the raw COMPUTED style value AS THE BROWSER REPORTS IT (via
+       getComputedStyle) — returned as a STRING WITH UNITS, e.g. "300px".
+     • Unlike .width(), this reflects whatever box-sizing actually produces —
+       if box-sizing: border-box is set, the browser's computed "width" already
+       includes padding+border, and .css('width') reports that as-is, WITHOUT
+       jQuery's content-box normalization.
+     • This is the key distinction: .width() is jQuery's normalized,
+       always-content-box NUMBER; .css('width') is the raw, unit-string,
+       box-sizing-dependent value.
+
+   .outerWidth([includeMargin])
+     • Content width + padding + border (i.e. the element's actual rendered
+       box width on the page).
+     • .outerWidth(true) ALSO adds margin — useful for "how much horizontal
+       space does this element actually occupy in the layout, including its
+       margin".
+     • .outerHeight()/.outerHeight(true) are the height equivalents;
+       .innerWidth()/.innerHeight() give content + padding (no border, no
+       margin) — one step between .width() and .outerWidth().
+
+     Quick summary table:
+       .width()                → content only, unitless number, box-sizing normalized
+       .innerWidth()            → content + padding, unitless number
+       .outerWidth()            → content + padding + border, unitless number
+       .outerWidth(true)        → content + padding + border + margin, unitless number
+       .css('width')            → raw computed value, string with units, NOT
+                                   box-sizing normalized
+
+────────────────────────────────────────────────────────────────────────────────
+Q80: Why is checking if ($(selector)) always true, even when nothing matched? How should you check for element existence?
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+A: $(selector) ALWAYS returns a jQuery OBJECT — even when the selector matches
+   ZERO elements, you still get back a valid (empty) jQuery object, not null,
+   undefined, or false. Since any object is truthy in JavaScript, a naive
+   existence check like this is a classic bug:
+
+     if ($('#does-not-exist')) {
+         console.log('found it!');   // this ALWAYS runs — the object itself
+     }                                // is truthy, regardless of match count
+
+   The CORRECT way to check whether a selector actually matched anything is to
+   check its .length property (the number of matched elements — 0 if nothing
+   matched, which is falsy and works correctly in a boolean context):
+
+     if ($('#does-not-exist').length) {
+         console.log('found it!');   // only runs if length > 0 — correct
+     }
+
+     if ($('#does-not-exist').length === 0) {
+         console.log('not found');
+     }
+
+   This is one of the most common jQuery interview "gotcha" questions —
+   testers want to see that you know a jQuery object's truthiness says nothing
+   about whether it actually matched any real DOM elements.
+
+────────────────────────────────────────────────────────────────────────────────
+Q81: Why does binding a delegated handler with .on(event, selector, fn) work for elements that don't exist yet, while $(selector).on(event, fn) does not?
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+A: This ties together the event-delegation and DOM-timing concepts from earlier
+   sections, and is a common practical/trick question.
+
+     // Direct binding — evaluates $('.item') RIGHT NOW, binding only to
+     // whatever .item elements currently exist in the DOM at this exact line
+     $('.item').on('click', handler);
+     // any .item added to the page AFTER this line runs has NO handler —
+     // clicking it does nothing, silently
+
+     // Delegated binding — the listener physically lives on #list (which
+     // must already exist), and jQuery checks the SELECTOR against
+     // event.target every time a click actually bubbles up through #list,
+     // at the TIME OF THE CLICK, not at binding time
+     $('#list').on('click', '.item', handler);
+     // any .item added to #list at ANY POINT AFTER this line — even minutes
+     // later, even elements that didn't exist yet when this code ran — WILL
+     // correctly trigger handler, because the match happens live, per-click
+
+   The key mental model: direct binding captures a SNAPSHOT of matching
+   elements at call time and attaches individually; delegated binding attaches
+   ONE listener to an ancestor and re-evaluates the selector dynamically on
+   every bubbled event — which is exactly why delegation is the standard
+   approach for content added via Ajax, infinite scroll, or any other
+   post-page-load DOM insertion.
+
+   Note the ancestor itself (#list in this example) DOES need to already exist
+   in the DOM at the time .on() is called — delegation solves the "children
+   added later" problem, not the "the container itself doesn't exist yet"
+   problem.
+
+================================================================================
+QUICK-REFERENCE CHEAT SHEET
+================================================================================
+
+DEPRECATED / REMOVED API STATUS:
+  $.browser              → REMOVED (1.9) - use feature detection instead
+  .live() / .die()        → REMOVED (1.9) - use .on()/.off()
+  .size()                 → REMOVED (3.0) - use .length
+  "ready" event alias     → REMOVED (3.0) - pass a function to $()/.ready()
+  $.parseJSON()            → deprecated 3.0, use native JSON.parse()
+  .bind()/.unbind()        → deprecated 3.x, REMOVED in 4.0 - use .on()/.off()
+  .delegate()/.undelegate()→ deprecated 3.x, REMOVED in 4.0 - use .on()/.off()
+  $.isArray()               → deprecated 3.2, REMOVED in 4.0 - use Array.isArray()
+  $.isFunction()             → deprecated 3.3, REMOVED in 4.0 - use typeof x === 'function'
+  $.trim()                   → deprecated 3.5, REMOVED in 4.0 - use String#trim()
+  $.now()                     → deprecated - use Date.now()
+
+EVENT API — ALWAYS USE .ON()/.OFF():
+  Direct:     $('#btn').on('click', handler);
+  Delegated:  $('#list').on('click', '.item', handler);   // works for future elements
+  Remove:     $('#btn').off('click', handler);
+  Once:       $('#btn').one('click', handler);
+  Namespaced: $(window).on('resize.widget', fn);  $(window).off('.widget');
+
+ATTR VS PROP:
+  .attr('checked')  → original markup attribute (string, does not track clicks)
+  .prop('checked')  → live boolean state (always accurate, PREFERRED)
+
+REMOVAL METHODS:
+  .remove()   → element gone, data/events cleaned up (permanent)
+  .empty()    → element stays, children gone, children's data/events cleaned up
+  .detach()   → element gone from DOM, data/events PRESERVED (temporary)
+
+WIDTH METHODS:
+  .width()          → content only, unitless number, box-sizing normalized
+  .innerWidth()      → content + padding
+  .outerWidth()       → content + padding + border
+  .outerWidth(true)    → content + padding + border + margin
+  .css('width')          → raw computed value, string with units, NOT normalized
+
+AJAX PROMISE STYLE:
+  $.ajax(url)
+    .done(function (data) { })          // success
+    .fail(function (jqXHR, status, err) { })  // failure
+    .always(function () { });           // either way
+  $.when(p1, p2).done(function (r1, r2) { });  // wait for all (like Promise.all)
+
+VANILLA JS EQUIVALENTS:
+  $(sel)                → document.querySelectorAll(sel)
+  .addClass/.removeClass → el.classList.add()/.remove()
+  .html() / .text()      → el.innerHTML / el.textContent
+  .on('click', fn)        → el.addEventListener('click', fn)
+  .ajax() / .get()         → fetch(url)
+  $(document).ready(fn)     → document.addEventListener('DOMContentLoaded', fn)
+
+COMMON PITFALLS:
+  if ($('#x'))            → ALWAYS truthy, even if nothing matched; use .length
+  $(this) vs this          → "this" is a raw DOM element inside jQuery callbacks;
+                              wrap with $(this) to use jQuery methods
+  arrow fn as handler        → breaks "this" binding; use event.currentTarget instead
+  .data('k', v)                → updates jQuery's internal cache only, does NOT
+                                  write back to the data-k attribute in markup
+  var in a loop binding handlers → classic closure bug; use let, an IIFE, or
+                                  .each()'s per-iteration callback scope
+
+================================================================================
+END OF FILE — JQUERY INTERVIEW QUESTIONS
