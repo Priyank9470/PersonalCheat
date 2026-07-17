@@ -1,0 +1,1038 @@
+================================================================================
+         NEXT.JS INTERVIEW QUESTIONS — BASIC TO ADVANCED
+         (With examples and answers — App Router focus, Pages Router noted)
+================================================================================
+
+HOW TO USE THIS FILE:
+  - Read each Q, think of your own answer first, then check the A.
+  - Sections flow from fundamentals to advanced production topics.
+  - Assumes familiarity with React itself — see react/interview-questions.txt
+    for React fundamentals (hooks, JSX, reconciliation, etc.) which are not
+    repeated here.
+  - Sections: Fundamentals & Rendering Strategies → App Router Basics →
+              Routing & Navigation → Data Fetching & Caching →
+              Server & Client Components → Server Actions & Mutations →
+              Layouts, Loading & Error UI → Middleware & Edge Runtime →
+              Metadata & SEO → Images, Fonts & Optimization →
+              API Routes & Route Handlers → Rendering Modes Deep Dive →
+              Performance → Deployment & Production → Pages Router (legacy) →
+              Advanced/Tricky Topics
+
+================================================================================
+SECTION 1: FUNDAMENTALS AND RENDERING STRATEGIES
+================================================================================
+
+Q1: What is Next.js? What problem does it solve on top of plain React?
+──────────────────────────────────────────────────────────
+A: Next.js is a full-stack React framework (by Vercel) that adds the
+   production infrastructure React itself doesn't provide: routing, server
+   rendering, data fetching conventions, bundling/optimization, API
+   endpoints, and deployment tooling — out of the box, with sane defaults.
+
+   Plain React (via Create React App / Vite) is just a UI library — you get
+   a single HTML shell and everything renders client-side (CSR). You'd have
+   to hand-assemble a router, an SSR setup, code splitting, image
+   optimization, and an API layer yourself.
+
+   Next.js provides:
+   • File-system based routing — folder structure defines URL structure.
+   • Multiple rendering strategies per-route — static, server-rendered, or
+     streamed — instead of an all-or-nothing CSR approach.
+   • Built-in data-fetching model tied directly into components (Server
+     Components, `fetch` caching) rather than a separate client-only layer.
+   • Built-in API routes (Route Handlers) — no separate backend needed for
+     simple endpoints.
+   • Automatic code splitting per route, image/font optimization, and a
+     production build pipeline (Turbopack/Webpack) tuned for these patterns.
+   • First-class deployment target on Vercel, but deployable anywhere
+     Node.js (or edge runtimes) run.
+
+────────────────────────────────────────────────────────────────────────────────
+Q2: What are the main rendering strategies in Next.js? Explain each.
+──────────────────────────────────────────────────────────
+A: • SSG (Static Site Generation) — HTML generated at BUILD time, served as
+     a static file from a CDN. Fastest possible response (no server work per
+     request). Best for content that's the same for every user and doesn't
+     change often (marketing pages, blog posts, docs).
+
+   • SSR (Server-Side Rendering) — HTML generated on the server FOR EACH
+     REQUEST, at request time. Best for pages that need fresh, per-request
+     data (a dashboard showing live data, a page personalized per logged-in
+     user) but still want the SEO/first-paint benefits of server-rendered
+     HTML.
+
+   • ISR (Incremental Static Regeneration) — a hybrid: pages are
+     statically generated (like SSG) but can be re-generated in the
+     background after a specified time interval (`revalidate`) or on-demand,
+     without a full rebuild/redeploy. Gets static-speed responses for most
+     requests while keeping content reasonably fresh.
+
+   • CSR (Client-Side Rendering) — the traditional React SPA model: a
+     minimal HTML shell ships, then JS renders everything in the browser.
+     In Next.js this happens for interactive, client-only parts (Client
+     Components) nested inside an otherwise server-rendered page — it's
+     rarely the strategy for a WHOLE page anymore.
+
+   In the App Router, you don't pick one strategy per PAGE globally the way
+   Pages Router did (`getStaticProps` vs `getServerSideProps`) — instead,
+   caching/revalidation behavior is configured per `fetch` call or per route
+   segment (see Section 4), and a route's overall behavior (static vs
+   dynamic) is INFERRED from what its Server Components actually do.
+
+────────────────────────────────────────────────────────────────────────────────
+Q3: App Router vs Pages Router — what changed and why?
+──────────────────────────────────────────────────────────
+A: Pages Router (`pages/` directory, the original Next.js model) — each file
+   in `pages/` is a route; data fetching via exported functions
+   (`getStaticProps`, `getServerSideProps`, `getStaticPaths`); all
+   components are Client Components under the hood (ship JS, hydrate) unless
+   you go out of your way to avoid it; layouts are manual (wrap `_app.tsx`).
+
+   App Router (`app/` directory, default since Next.js 13, stable/
+   recommended since 13.4+) — built on React Server Components; each route
+   is a folder with a `page.tsx`; layouts are a first-class file convention
+   (`layout.tsx`) that persist across navigations without re-rendering;
+   data fetching happens directly in Server Components via `async`/`await`
+   and cached `fetch`, no special exported functions needed; supports
+   streaming/`Suspense` UI natively; nested layouts, parallel routes, and
+   intercepting routes are only available here.
+
+   Why the change: Server Components let Next.js ship dramatically less JS
+   to the client by default (only Client Components ship JS), colocate data
+   fetching with the component that needs it (no prop-drilling data down
+   from `getServerSideProps`), and support fine-grained streaming of
+   different parts of a page independently. Pages Router still works and is
+   fully supported for existing apps, but new projects default to App
+   Router.
+
+================================================================================
+SECTION 2: APP ROUTER BASICS
+================================================================================
+
+Q4: What do the special file names inside an `app/` folder do?
+──────────────────────────────────────────────────────────
+A: Next.js treats certain reserved filenames specially inside each route
+   segment folder (a "route segment" = one folder level = one URL segment):
+
+     app/
+       layout.tsx      — shared UI wrapping this segment + all children;
+                          persists across navigation (doesn't re-render/
+                          remount when navigating between child routes)
+       page.tsx         — the actual UI for this route; makes the segment
+                          PUBLICLY ACCESSIBLE as a URL (a folder WITHOUT a
+                          page.tsx is not a navigable route by itself)
+       loading.tsx      — instant loading UI shown while this segment (and
+                          its children) suspend; auto-wraps the segment in
+                          a <Suspense> boundary
+       error.tsx        — error UI boundary for this segment (must be a
+                          Client Component — uses React Error Boundary
+                          semantics under the hood)
+       not-found.tsx    — UI shown when notFound() is called or a route
+                          doesn't match
+       route.ts         — an API endpoint (Route Handler) for this segment
+                          — mutually exclusive with page.tsx in the SAME
+                          segment
+       template.tsx     — like layout.tsx but re-mounts (fresh state) on
+                          every navigation instead of persisting
+       default.tsx      — fallback UI for a parallel route slot when no
+                          match is found
+
+   Only files inside these specific reserved names are routable/special —
+   you can colocate other files (components, utils, tests) inside a route
+   folder freely; Next.js ignores anything not named per these conventions.
+
+────────────────────────────────────────────────────────────────────────────────
+Q5: How does file-based routing work? Show dynamic, catch-all, and route groups.
+──────────────────────────────────────────────────────────
+A:   app/
+       page.tsx                     → /
+       about/page.tsx               → /about
+       blog/[slug]/page.tsx         → /blog/:slug           (dynamic segment)
+       blog/[...slug]/page.tsx      → /blog/*                (catch-all — one+ segments)
+       blog/[[...slug]]/page.tsx    → /blog or /blog/*       (optional catch-all)
+       (marketing)/about/page.tsx   → /about                 (route GROUP — the
+                                                                parens are excluded
+                                                                from the URL; used to
+                                                                organize files/apply a
+                                                                shared layout without
+                                                                affecting the path)
+       shop/@modal/page.tsx         → parallel route slot "modal" (advanced —
+                                                                render independent
+                                                                content in the same
+                                                                layout, e.g. a photo
+                                                                modal over a feed)
+
+   Dynamic segment params are available in the page component:
+     // app/blog/[slug]/page.tsx
+     export default async function BlogPost({ params }: { params: Promise<{ slug: string }> }) {
+       const { slug } = await params;   // Next.js 15: params is a Promise
+       const post = await getPost(slug);
+       return <article>{post.title}</article>;
+     }
+
+   (Note: in Next.js 15, `params` and `searchParams` became asynchronous —
+   must be awaited — as part of enabling more partial-prerendering
+   optimizations; earlier versions passed them as plain synchronous objects.)
+
+────────────────────────────────────────────────────────────────────────────────
+Q6: What is the `<Link>` component? How is it different from `<a>`?
+──────────────────────────────────────────────────────────
+A: `next/link`'s `<Link>` enables client-side navigation between routes —
+   Next.js intercepts the click, updates the URL via the History API, and
+   only fetches/renders the new route's content, instead of a full page
+   reload (which a plain `<a href>` would trigger).
+
+     import Link from 'next/link';
+     <Link href="/about">About</Link>
+     <Link href={`/blog/${post.slug}`} prefetch={true}>{post.title}</Link>
+
+   Extra behavior over `<a>`:
+   • Automatic prefetching — links in the viewport are automatically
+     prefetched (their code/data fetched ahead of time) so navigation feels
+     instant when clicked (can disable per-link with `prefetch={false}`).
+   • Preserves client-side state where possible (layouts that don't change
+     between the old and new route are NOT re-rendered/remounted).
+
+   Programmatic navigation uses the `useRouter` hook (`next/navigation` in
+   App Router, distinct from the Pages Router's `next/router`):
+     'use client';
+     import { useRouter } from 'next/navigation';
+     const router = useRouter();
+     router.push('/dashboard');
+
+================================================================================
+SECTION 3: SERVER & CLIENT COMPONENTS
+================================================================================
+
+Q7: How do Server Components and Client Components work together in Next.js?
+──────────────────────────────────────────────────────────
+A: In the App Router, EVERY component is a Server Component by default —
+   rendered only on the server, sends zero JS to the client for that
+   component. Adding `'use client'` at the top of a file marks it (and
+   everything it imports) as a Client Component — rendered on the server
+   for the initial HTML too, but ALSO shipped as JS and hydrated in the
+   browser so it can use state/effects/browser APIs/event handlers.
+
+     // app/page.tsx — Server Component (default, no directive needed)
+     async function Page() {
+       const data = await fetch('https://api.example.com/data').then(r => r.json());
+       return (
+         <div>
+           <h1>{data.title}</h1>
+           <LikeButton initialLikes={data.likes} />   {/* Client Component child */}
+         </div>
+       );
+     }
+
+     // app/LikeButton.tsx
+     'use client';
+     import { useState } from 'react';
+     export default function LikeButton({ initialLikes }: { initialLikes: number }) {
+       const [likes, setLikes] = useState(initialLikes);
+       return <button onClick={() => setLikes(l => l + 1)}>{likes} likes</button>;
+     }
+
+   Rules:
+   • Server Components CAN import/render Client Components.
+   • Client Components CANNOT import a Server Component directly — but a
+     Server Component can be passed to a Client Component AS `children`/
+     props (the "slot" pattern) since it's already rendered by the time the
+     Client Component receives it.
+   • Server Components can be `async` and directly `await` data — no
+     useEffect/loading-state dance needed for the initial fetch.
+   • Server Components CANNOT use useState, useEffect, useContext, browser
+     APIs (window/localStorage), or event handlers (onClick etc.) — anything
+     interactive must live in a Client Component.
+   • The `'use client'` boundary is about where a component (and its
+     imports) EXECUTE and hydrate — it doesn't mean "only render on the
+     client"; Client Components still render on the server for the initial
+     HTML, then hydrate in the browser.
+
+────────────────────────────────────────────────────────────────────────────────
+Q8: Why does Next.js push you toward Server Components? What's the tradeoff?
+──────────────────────────────────────────────────────────
+A: Benefits:
+   • Zero client-bundle cost — a Server Component's code (and its
+     server-only dependencies, e.g. a database client or a large markdown
+     parser) never ships to the browser at all, shrinking the JS bundle
+     significantly for content-heavy, less-interactive parts of a page.
+   • Direct backend access — a Server Component can query a database or
+     read a file directly, no separate API endpoint needed as a middleman.
+   • Colocated data fetching — the component that needs data fetches it
+     right where it's used (`await fetch(...)` inline), rather than fetching
+     high up and drilling data down through props.
+   • Automatic streaming — combined with `loading.tsx`/`Suspense`, slow
+     data-dependent parts of the page can stream in independently without
+     blocking the rest of the page.
+
+   Tradeoffs:
+   • No interactivity — any state, effect, event handler, or browser API
+     forces that component (and everything it composes downward, though NOT
+     necessarily everything ABOVE it) into `'use client'`.
+   • Mental model shift — deciding where the server/client boundary goes,
+     and understanding the "Server Components can't be imported BY Client
+     Components, only passed as children" rule, has a learning curve coming
+     from plain React/CRA.
+   • Some libraries (especially older ones relying on browser globals at
+     import time, or React context providers) need to be Client Components
+     themselves or wrapped, requiring careful boundary placement.
+
+Q9: Best practice — where should you put the `'use client'` boundary?
+──────────────────────────────────────────────────────────
+A: Push `'use client'` as far DOWN (leaf-ward) in the component tree as
+   possible — wrap only the specific interactive piece (a button, a form, a
+   dropdown), not an entire page or a high-level layout — so the maximum
+   amount of the tree stays server-rendered with no client JS cost.
+
+     // BAD — forces the whole page (including static content) to be a
+     // Client Component just because ONE button needs an onClick
+     'use client';
+     export default function Page({ data }) {
+       return (
+         <div>
+           <h1>{data.title}</h1>
+           <p>{data.longDescription}</p>
+           <button onClick={() => alert('liked')}>Like</button>
+         </div>
+       );
+     }
+
+     // GOOD — only the interactive leaf is a Client Component; the
+     // heading/description stay server-rendered, zero JS for them
+     export default async function Page() {
+       const data = await getData();
+       return (
+         <div>
+           <h1>{data.title}</h1>
+           <p>{data.longDescription}</p>
+           <LikeButton />   {/* small, separate 'use client' component */}
+         </div>
+       );
+     }
+
+================================================================================
+SECTION 4: DATA FETCHING & CACHING
+================================================================================
+
+Q10: How does data fetching work in the App Router? Explain fetch caching.
+──────────────────────────────────────────────────────────
+A: Server Components can `fetch` data directly with plain `async`/`await` —
+   no `getStaticProps`/`getServerSideProps` needed. Next.js extends the
+   native `fetch` API with its own caching layer controlled per call:
+
+     // Cached indefinitely (like old getStaticProps) — default in Next <15;
+     // in Next.js 15+, fetch defaults to NOT cached ('no-store') unless
+     // explicitly opted in — see the version note below.
+     fetch(url, { cache: 'force-cache' });
+
+     // Never cached — fetched fresh on every request (like getServerSideProps)
+     fetch(url, { cache: 'no-store' });
+
+     // Time-based revalidation (like ISR) — cached, but re-fetched in the
+     // background at most once every N seconds
+     fetch(url, { next: { revalidate: 60 } });
+
+     // Tag-based revalidation — cached until explicitly invalidated
+     fetch(url, { next: { tags: ['posts'] } });
+     // ...later, e.g. in a Server Action after a mutation:
+     import { revalidateTag } from 'next/cache';
+     revalidateTag('posts');
+
+   IMPORTANT VERSION NOTE: Next.js 15 changed the DEFAULT caching behavior —
+   `fetch` requests, GET Route Handlers, and the client-side Router Cache
+   are all UNCACHED by default now (opt-in to caching), reversing the
+   Next.js 13/14 default (cached by default, opt-out). Always confirm which
+   major version a codebase/question is targeting, since this flips a lot of
+   "is this page static or dynamic" reasoning.
+
+────────────────────────────────────────────────────────────────────────────────
+Q11: What is the difference between the Data Cache, the Full Route Cache, and the Router Cache?
+──────────────────────────────────────────────────────────
+A: Next.js has several distinct caching layers, which is a common source of
+   confusion (and a favorite "gotcha" interview topic):
+
+   • Data Cache (server-side) — caches the results of individual `fetch`
+     calls, persists across requests and deployments (until revalidated or
+     explicitly invalidated), controlled by the `fetch` options in Q10.
+
+   • Full Route Cache (server-side, build time) — caches the rendered
+     HTML + React Server Component payload for STATIC routes at build time,
+     so subsequent requests for that route can be served without
+     re-rendering at all. A route is only eligible for this if it (and
+     everything it renders) can be statically determined — using
+     `no-store`/dynamic functions like `cookies()`/`headers()` opts a route
+     OUT of the Full Route Cache (makes it "dynamic").
+
+   • Router Cache (client-side, in-memory, per session) — caches the RSC
+     payload for routes the user has already visited/prefetched during the
+     current browser session, so navigating back to a previously visited
+     route doesn't require a server round-trip. Cleared on full page reload.
+
+   These are independent: you can have fresh data in the Data Cache but a
+   stale Router Cache entry (or vice versa) — which is why `revalidatePath`/
+   `revalidateTag`/`router.refresh()` exist as different tools for
+   invalidating different layers.
+
+────────────────────────────────────────────────────────────────────────────────
+Q12: How do you make a route dynamic (opt out of static generation) on purpose?
+──────────────────────────────────────────────────────────
+A: A route becomes dynamic automatically if it uses something that can only
+   be known at request time:
+   • Reading `cookies()` or `headers()` (from `next/headers`).
+   • Reading `searchParams` in a Server Component.
+   • A `fetch` call with `cache: 'no-store'` or `next: { revalidate: 0 }`.
+   • Using `noStore()` (from `next/cache`) explicitly.
+
+   You can also force it explicitly via a route segment config export:
+     export const dynamic = 'force-dynamic';   // always render per-request
+     export const dynamic = 'force-static';    // force static even if dynamic APIs used
+     export const revalidate = 60;             // segment-level ISR interval
+
+   Why you'd want this: a dashboard showing the current logged-in user's
+   data (from a cookie/session) MUST be rendered per-request — statically
+   generating it once at build time would leak one user's data to everyone,
+   or simply be wrong/stale.
+
+================================================================================
+SECTION 5: SERVER ACTIONS & MUTATIONS
+================================================================================
+
+Q13: What are Server Actions? How do they differ from a Route Handler?
+──────────────────────────────────────────────────────────
+A: A Server Action is an async function marked with `'use server'` that can
+   be called directly from a Client (or Server) Component — typically to
+   handle form submissions/mutations — without manually creating an API
+   route and calling `fetch` yourself. Next.js generates the network
+   plumbing (a POST request under the hood) automatically.
+
+     // app/actions.ts
+     'use server';
+     import { revalidatePath } from 'next/cache';
+
+     export async function createPost(formData: FormData) {
+       const title = formData.get('title') as string;
+       await db.posts.create({ title });
+       revalidatePath('/posts');   // invalidate cached data so the list updates
+     }
+
+     // app/new-post/page.tsx (Server Component — no 'use client' needed
+     // just to wire up the form; the <form action={...}> works via
+     // progressive enhancement even before JS hydrates)
+     import { createPost } from '../actions';
+     export default function NewPost() {
+       return (
+         <form action={createPost}>
+           <input name="title" />
+           <button type="submit">Create</button>
+         </form>
+       );
+     }
+
+   Server Action vs Route Handler (`route.ts`):
+   • A Route Handler is a general-purpose HTTP endpoint (GET/POST/etc.) —
+     useful for a public API consumed by external clients, webhooks, or when
+     you need explicit control over the HTTP request/response.
+   • A Server Action is specifically for calling server-side logic FROM your
+     own React components (mutations tied to UI interactions) — less
+     boilerplate, integrates with `useFormStatus`/`useActionState` for
+     pending/error UI, and supports progressive enhancement (`<form
+     action={fn}>` works even if client JS hasn't loaded yet, since it falls
+     back to a real HTML form POST).
+
+────────────────────────────────────────────────────────────────────────────────
+Q14: How do you show pending/error state for a Server Action?
+──────────────────────────────────────────────────────────
+A: `useFormStatus` (reads the nearest parent `<form>`'s pending state — must
+   be used in a component RENDERED INSIDE the form, not the form's own
+   component) and `useActionState` (React 19, replaces the older
+   `useFormState`) for managing action result/error state:
+
+     'use client';
+     import { useFormStatus } from 'react-dom';
+
+     function SubmitButton() {
+       const { pending } = useFormStatus();
+       return <button disabled={pending}>{pending ? 'Saving…' : 'Save'}</button>;
+     }
+
+     // ---
+
+     'use client';
+     import { useActionState } from 'react';
+     import { createPost } from './actions';
+
+     function NewPostForm() {
+       const [state, formAction, isPending] = useActionState(createPost, { error: null });
+       return (
+         <form action={formAction}>
+           <input name="title" />
+           {state.error && <p>{state.error}</p>}
+           <button disabled={isPending}>Create</button>
+         </form>
+       );
+     }
+
+   The Server Action itself would return `{ error: '...' }` instead of
+   throwing, so `useActionState` can surface it as `state`.
+
+================================================================================
+SECTION 6: LAYOUTS, LOADING & ERROR UI
+================================================================================
+
+Q15: How do nested layouts work? Why don't they re-render on navigation?
+──────────────────────────────────────────────────────────
+A: Each folder in `app/` can have its own `layout.tsx`, and layouts nest —
+   a route's actual UI is the composition of every layout from the root
+   down to its own `page.tsx`, each wrapping the next via `children`.
+
+     app/layout.tsx           — root layout (required; wraps <html>/<body>)
+     app/dashboard/layout.tsx — dashboard layout (nav sidebar, etc.)
+     app/dashboard/settings/page.tsx
+
+     // renders as: RootLayout > DashboardLayout > SettingsPage
+
+   Layouts persist across navigations between their own child routes — e.g.
+   navigating from `/dashboard/settings` to `/dashboard/billing` re-renders
+   only the `page.tsx` content; `DashboardLayout` (and its state — an open
+   sidebar, scroll position) is preserved, not remounted. This is possible
+   because the App Router's client-side navigation only re-fetches/re-renders
+   the SEGMENT of the tree that actually changed, not the whole page.
+
+   `template.tsx` is the escape hatch when you WANT fresh state/remount on
+   every navigation (e.g. a page-enter animation that should replay every
+   time) — same file position/nesting as layout.tsx, opposite persistence
+   behavior.
+
+────────────────────────────────────────────────────────────────────────────────
+Q16: How does `loading.tsx` work under the hood?
+──────────────────────────────────────────────────────────
+A: Adding a `loading.tsx` file in a route segment automatically wraps that
+   segment's `page.tsx` (and its children) in a React `<Suspense>` boundary,
+   using the `loading.tsx` export as the `fallback`. This is pure
+   convention/codegen — there's no different mechanism than Suspense itself.
+
+     app/dashboard/loading.tsx
+       export default function Loading() { return <Spinner />; }
+
+     // is roughly equivalent to Next.js internally generating:
+     <Suspense fallback={<Loading />}>
+       <DashboardPage />
+     </Suspense>
+
+   This means the actual streaming behavior follows normal Suspense rules
+   (see react/interview-questions.txt Q43) — if `DashboardPage` is an async
+   Server Component that awaits a slow fetch, Next.js can stream the HTML
+   shell (with the loading fallback) to the browser immediately, then stream
+   in the real content when the data resolves, without blocking the whole
+   page/response on that one slow fetch.
+
+────────────────────────────────────────────────────────────────────────────────
+Q17: How does `error.tsx` work? What about a global 500 error?
+──────────────────────────────────────────────────────────
+A: `error.tsx` in a route segment becomes an Error Boundary (must be a
+   Client Component — `'use client'` — since Error Boundaries rely on
+   React class-component-based lifecycle semantics under the hood) that
+   catches errors thrown during rendering anywhere in that segment.
+
+     'use client';
+     export default function Error({ error, reset }: { error: Error; reset: () => void }) {
+       return (
+         <div>
+           <p>Something went wrong: {error.message}</p>
+           <button onClick={() => reset()}>Try again</button>   {/* re-renders the segment */}
+         </div>
+       );
+     }
+
+   `reset()` attempts to re-render the segment (useful for transient errors —
+   e.g. retry after a flaky network request).
+
+   `global-error.tsx` (in the app root) catches errors in the ROOT layout
+   itself (which a regular `error.tsx` can't catch, since error boundaries
+   can't catch errors in their own parent/sibling layout) — it must define
+   its own `<html>`/`<body>` since it replaces the root layout entirely when
+   triggered. This is the closest thing to a global fallback/500 page.
+
+================================================================================
+SECTION 7: MIDDLEWARE & EDGE RUNTIME
+================================================================================
+
+Q18: What is Next.js Middleware? Give a common use case.
+──────────────────────────────────────────────────────────
+A: `middleware.ts` at the project root exports a function that runs BEFORE a
+   request completes, for every matching route (configurable via a
+   `matcher`), letting you inspect/modify the request or response, redirect,
+   rewrite, or set headers/cookies — before any page rendering happens.
+
+     // middleware.ts
+     import { NextResponse } from 'next/server';
+     import type { NextRequest } from 'next/server';
+
+     export function middleware(request: NextRequest) {
+       const token = request.cookies.get('session')?.value;
+       if (!token && request.nextUrl.pathname.startsWith('/dashboard')) {
+         return NextResponse.redirect(new URL('/login', request.url));
+       }
+       return NextResponse.next();
+     }
+
+     export const config = {
+       matcher: ['/dashboard/:path*'],   // only run middleware for these paths
+     };
+
+   Common use cases: authentication/authorization gating, A/B testing
+   (rewrite to a variant route), geolocation-based redirects/localization,
+   bot detection, adding security headers, request logging.
+
+   Runs on the Edge Runtime by default (a constrained, fast-starting JS
+   runtime, not full Node.js — see Q19) — keep it lightweight, since it
+   executes on every matched request, close to the user, before caching/
+   rendering.
+
+────────────────────────────────────────────────────────────────────────────────
+Q19: Edge Runtime vs Node.js Runtime — what's the difference?
+──────────────────────────────────────────────────────────
+A: Next.js can execute server code on two different runtimes:
+
+   • Node.js runtime — the full Node.js environment, access to all Node
+     APIs/native modules (fs, most npm packages, database drivers), higher
+     cold-start latency, runs in a traditional server/serverless function.
+
+   • Edge runtime — a lighter, Web-standard-APIs-only runtime (based on
+     V8 isolates, similar to Cloudflare Workers) deployed to edge locations
+     geographically close to users. Much faster cold starts, but a
+     RESTRICTED API surface — no `fs`, no arbitrary native Node modules, only
+     Web APIs (fetch, Request/Response, crypto.subtle, etc.).
+
+   Middleware ALWAYS runs on the Edge runtime. Route Handlers and pages can
+   opt into the Edge runtime explicitly:
+     export const runtime = 'edge';   // vs default 'nodejs'
+
+   Choose Edge for latency-sensitive, lightweight logic (auth checks,
+   redirects, simple personalization) that doesn't need Node-specific APIs
+   or heavy npm dependencies; stick with Node.js runtime for anything using
+   a database driver, file system access, or large/native dependencies.
+
+================================================================================
+SECTION 8: METADATA & SEO
+================================================================================
+
+Q20: How do you manage `<title>`/meta tags/SEO in the App Router?
+──────────────────────────────────────────────────────────
+A: Via the Metadata API — either a static `metadata` object export or a
+   dynamic `generateMetadata` async function export, per route segment
+   (`layout.tsx` or `page.tsx`) — replacing the old `next/head` approach
+   from the Pages Router.
+
+     // Static
+     export const metadata = {
+       title: 'My Blog',
+       description: 'Thoughts on software.',
+     };
+
+     // Dynamic — e.g. per-post title/description, often needs to fetch data
+     export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
+       const { slug } = await params;
+       const post = await getPost(slug);
+       return {
+         title: post.title,
+         description: post.excerpt,
+         openGraph: { images: [post.coverImage] },
+       };
+     }
+
+   Metadata from nested layouts/pages MERGES (child overrides/extends
+   parent) — e.g. a root layout sets a default `title.template`
+   (`'%s | My Blog'`) and each page just sets its own short `title`, which
+   gets interpolated into the template automatically.
+
+   Also covers: `sitemap.ts`/`robots.ts` file conventions for auto-generating
+   `sitemap.xml`/`robots.txt`, and streaming-safe metadata resolution (Next.js
+   waits for `generateMetadata` before streaming the `<head>`, even though
+   the page body can stream progressively).
+
+================================================================================
+SECTION 9: IMAGES, FONTS & OPTIMIZATION
+================================================================================
+
+Q21: What does `next/image` do differently from a plain `<img>` tag?
+──────────────────────────────────────────────────────────
+A: `<Image>` (from `next/image`) automatically handles several optimizations
+   a raw `<img>` requires manual work for:
+   • Automatic resizing/format conversion (serves WebP/AVIF when the
+     browser supports it) and responsive `srcset` generation based on the
+     `sizes` prop, so users download an appropriately-sized image for their
+     viewport/device instead of one giant original file.
+   • Lazy loading by default (images off-screen aren't fetched until
+     they're about to scroll into view) — except images marked `priority`.
+   • Prevents Cumulative Layout Shift (CLS) by requiring explicit
+     `width`/`height` (or `fill` with a sized parent) so the browser reserves
+     the correct space before the image loads.
+   • `priority` prop — for above-the-fold/LCP (Largest Contentful Paint)
+     images, disables lazy loading and preloads them, since lazy-loading your
+     hero image would hurt your LCP score.
+
+     import Image from 'next/image';
+     <Image src="/hero.jpg" alt="Hero" width={1200} height={600} priority />
+
+   Requires either a known static import (Next.js reads dimensions
+   automatically) or explicit width/height for remote images, plus
+   configuring allowed remote domains in `next.config.ts` (`images.remotePatterns`)
+   for security (prevents arbitrary remote image optimization abuse).
+
+────────────────────────────────────────────────────────────────────────────────
+Q22: How does `next/font` help with font loading performance?
+──────────────────────────────────────────────────────────
+A: `next/font` self-hosts font files (including Google Fonts) at BUILD time
+   — no runtime request to Google's/a third-party font CDN — and
+   automatically injects the correct `font-display` and preload strategy,
+   eliminating layout shift from late-loading web fonts (a common Core Web
+   Vitals/CLS problem) and removing an external network dependency/privacy
+   concern (no request to Google's server per page view).
+
+     import { Inter } from 'next/font/google';
+     const inter = Inter({ subsets: ['latin'] });
+
+     export default function RootLayout({ children }) {
+       return (
+         <html lang="en" className={inter.className}>
+           <body>{children}</body>
+         </html>
+       );
+     }
+
+================================================================================
+SECTION 10: API ROUTES / ROUTE HANDLERS
+================================================================================
+
+Q23: How do you build an API endpoint in the App Router?
+──────────────────────────────────────────────────────────
+A: A `route.ts` file in any `app/` folder exports functions named after HTTP
+   methods — `GET`, `POST`, `PUT`, `PATCH`, `DELETE` — each receiving a
+   standard Web `Request` and returning a `Response` (or Next.js's
+   `NextResponse` helper).
+
+     // app/api/posts/route.ts
+     import { NextResponse } from 'next/server';
+
+     export async function GET(request: Request) {
+       const posts = await db.posts.findMany();
+       return NextResponse.json(posts);
+     }
+
+     export async function POST(request: Request) {
+       const body = await request.json();
+       const post = await db.posts.create(body);
+       return NextResponse.json(post, { status: 201 });
+     }
+
+     // app/api/posts/[id]/route.ts — dynamic segment, same as pages
+     export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+       const { id } = await params;
+       const post = await db.posts.findUnique({ where: { id } });
+       if (!post) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+       return NextResponse.json(post);
+     }
+
+   A `route.ts` and a `page.tsx` cannot coexist in the SAME segment (they'd
+   both try to handle the same URL for different purposes) — Route Handlers
+   are for API-style JSON/data responses; pages are for rendered UI.
+
+================================================================================
+SECTION 11: RENDERING MODES DEEP DIVE
+================================================================================
+
+Q24: What is streaming SSR, and how does it improve perceived performance?
+──────────────────────────────────────────────────────────
+A: Traditional SSR generates the ENTIRE page's HTML on the server before
+   sending ANY of it to the browser — a single slow data fetch anywhere on
+   the page blocks the whole response (Time To First Byte suffers for the
+   whole page, not just the slow part).
+
+   Streaming SSR (via React 18's `renderToReadableStream` + Suspense, which
+   Next.js's App Router uses by default) sends the HTML shell immediately,
+   with `loading.tsx`/`<Suspense fallback>` placeholders for parts still
+   waiting on data, then streams in the resolved HTML for each Suspense
+   boundary AS IT BECOMES READY, out of order if needed, patching it into
+   the DOM progressively (using inline `<script>` chunks that reposition
+   content — no client JS framework needed for this part, works even before
+   hydration).
+
+   Net effect: fast parts of the page (e.g. the header/nav) are visible
+   almost immediately; slow parts (e.g. a personalized recommendations
+   widget hitting a slow third-party API) stream in later without blocking
+   everything else — much better perceived performance than an
+   all-or-nothing wait.
+
+────────────────────────────────────────────────────────────────────────────────
+Q25: What is Partial Prerendering (PPR)?
+──────────────────────────────────────────────────────────
+A: Partial Prerendering (introduced experimentally in Next.js 14, evolving
+   through 15) lets a SINGLE route serve a static shell instantly (like SSG
+   — precomputed at build time) while dynamic, per-request parts of the SAME
+   page stream in afterward (like SSR) — combining both rendering strategies
+   in one route instead of forcing an entire route to be either fully static
+   or fully dynamic.
+
+   Mechanically: Next.js prerenders the route up to the first `<Suspense>`
+   boundary that contains dynamic data (`cookies()`, uncached `fetch`,
+   etc.), serves that static shell instantly from the edge/CDN, then
+   streams in the dynamic Suspense-wrapped content on request — e.g. a
+   product page where the product details are static (same for everyone,
+   prerendered) but a "recommended for you" section depends on the logged-in
+   user's cookies (dynamic, streamed in).
+
+   This targets the common real-world case where MOST of a page is static
+   but a small part is genuinely personalized/dynamic — previously you had
+   to make the whole route dynamic just for that one part.
+
+================================================================================
+SECTION 12: PERFORMANCE
+================================================================================
+
+Q26: What tools/techniques does Next.js provide for performance beyond rendering strategy?
+──────────────────────────────────────────────────────────
+A: • Automatic code splitting per route — each page's JS bundle only
+     includes what that page needs; navigating to another route lazily loads
+     its chunk (further reducible with `next/dynamic` for heavy
+     components within a page).
+   • `next/dynamic` — client-side lazy loading with an optional custom
+     loading state, and `{ ssr: false }` to skip server rendering entirely
+     for a component that only makes sense in the browser (e.g. a
+     canvas-heavy chart library with no meaningful server-rendered output).
+       const Chart = dynamic(() => import('./Chart'), { ssr: false });
+   • `next/image` / `next/font` — see Section 9.
+   • `next/script` — controls third-party script loading strategy
+     (`beforeInteractive`, `afterInteractive`, `lazyOnload`) so analytics/
+     chat-widget scripts don't block hydration or the main thread during
+     initial load.
+   • Bundle analysis via `@next/bundle-analyzer` to find bloat.
+   • Turbopack (Rust-based bundler, stable for dev since Next.js 15,
+     expanding to production builds) — dramatically faster local dev server
+     startup/HMR than Webpack.
+
+────────────────────────────────────────────────────────────────────────────────
+Q27: How do Core Web Vitals map to Next.js features?
+──────────────────────────────────────────────────────────
+A: • LCP (Largest Contentful Paint) — helped by SSR/SSG (content is in the
+     initial HTML, not waiting on client JS to render it), `next/image`
+     `priority` on hero images, and streaming (so the LCP element isn't
+     blocked behind an unrelated slow fetch elsewhere on the page).
+   • CLS (Cumulative Layout Shift) — helped by `next/image`'s required
+     width/height (reserved space) and `next/font`'s automatic font-display
+     handling (no font-swap layout jump).
+   • INP (Interaction to Next Paint, replaced FID as a Core Web Vital in
+     2024) — helped by smaller JS bundles (Server Components shipping less
+     JS to hydrate/parse/execute) and code splitting so less JS competes for
+     the main thread during/after load.
+
+   `next build` outputs a size summary per route, and tools like
+   `next/script`'s loading strategies and bundle analysis help track
+   regressions before they hit Core Web Vitals in production (measurable via
+   Vercel Analytics, Lighthouse, or field data/CrUX).
+
+================================================================================
+SECTION 13: DEPLOYMENT & PRODUCTION
+================================================================================
+
+Q28: What does `next build` produce, and what are the deployment options?
+──────────────────────────────────────────────────────────
+A: `next build` compiles the app and, per route, determines/outputs whether
+   it's Static (○), Server-rendered/Dynamic (λ), or SSG with ISR — visible in
+   the build output summary — plus optimized JS bundles, prerendered HTML
+   for static routes, and metadata for the Next.js server runtime.
+
+   `next start` runs the production Node.js server (needed for SSR/ISR/
+   Route Handlers/Middleware). For a purely static site with no dynamic
+   routes, `output: 'export'` in `next.config.ts` produces plain static
+   HTML/JS/CSS deployable to any static host (no Node server needed) — but
+   this disables anything requiring a server at request time (SSR, Route
+   Handlers with dynamic logic, Image Optimization's on-demand resizing,
+   Middleware, ISR).
+
+   Deployment targets:
+   • Vercel — first-party, zero-config, every Next.js feature (ISR, Edge
+     Middleware, Image Optimization, streaming) works out of the box since
+     Vercel's infrastructure is built around these primitives.
+   • Self-hosted Node.js server (`next start`) — full feature support, you
+     manage the infrastructure.
+   • Docker — official Next.js Docker example uses `output: 'standalone'`
+     in `next.config.ts` to produce a minimal, self-contained server bundle
+     (only the files actually needed at runtime, much smaller image).
+   • Other platforms (Netlify, AWS Amplify, Cloudflare) — supported via
+     adapters with varying levels of full-feature parity; always check which
+     Next.js features (especially ISR/Middleware) are actually supported by
+     a given non-Vercel platform's adapter before committing to it.
+
+================================================================================
+SECTION 14: PAGES ROUTER (LEGACY — STILL WIDELY USED IN EXISTING APPS)
+================================================================================
+
+Q29: In the Pages Router, what's the difference between getStaticProps, getServerSideProps, and getStaticPaths?
+──────────────────────────────────────────────────────────
+A:   // pages/blog/[slug].tsx
+
+     // Runs at BUILD time (SSG) — or on a background revalidation interval if `revalidate` is set (ISR)
+     export async function getStaticProps({ params }) {
+       const post = await getPost(params.slug);
+       return { props: { post }, revalidate: 60 };   // ISR: revalidate every 60s
+     }
+
+     // Required alongside getStaticProps for DYNAMIC routes — tells Next.js
+     // which [slug] values to pre-render at build time
+     export async function getStaticPaths() {
+       const posts = await getAllPosts();
+       return {
+         paths: posts.map(p => ({ params: { slug: p.slug } })),
+         fallback: 'blocking',   // or `true` (show fallback UI first) or `false` (404 for unlisted paths)
+       };
+     }
+
+     // Runs on EVERY request (SSR) — use instead of getStaticProps when
+     // data must be fresh per-request (can't be pre-rendered/cached the same way)
+     export async function getServerSideProps(context) {
+       const data = await fetchLiveData(context.req.cookies.session);
+       return { props: { data } };
+     }
+
+     export default function BlogPost({ post }) { return <article>{post.title}</article>; }
+
+   Only ONE of `getStaticProps`/`getServerSideProps` can be used per page —
+   they're mutually exclusive strategies for that route. This exported-
+   function model is what the App Router's async Server Components + `fetch`
+   caching replaced — same underlying capabilities (SSG/SSR/ISR), different,
+   more colocated API.
+
+────────────────────────────────────────────────────────────────────────────────
+Q30: What is `_app.tsx` and `_document.tsx` for in the Pages Router?
+──────────────────────────────────────────────────────────
+A: • `_app.tsx` — the top-level component wrapping every page; used for
+     persistent layout, global CSS imports, and global providers (theme,
+     auth context, React Query's QueryClientProvider) that should survive
+     across page navigations.
+        export default function App({ Component, pageProps }) {
+          return <ThemeProvider><Component {...pageProps} /></ThemeProvider>;
+        }
+
+   • `_document.tsx` — customizes the base HTML document shell
+     (`<html>`/`<head>`/`<body>` structure) — used for things that must be
+     set once for the whole document (e.g. `lang` attribute, custom fonts
+     links, a fixed div for a portal root). Only renders on the SERVER
+     (no client-side re-render) — cannot contain event handlers/interactive
+     logic, unlike `_app.tsx`.
+
+   These map conceptually to the App Router's `app/layout.tsx` (which
+   merges both responsibilities into one file/convention, since Server
+   Components made the split less necessary).
+
+================================================================================
+SECTION 15: ADVANCED / TRICKY TOPICS
+================================================================================
+
+Q31: Why might a page you expect to be static show up as dynamic in `next build` output?
+──────────────────────────────────────────────────────────
+A: A route's static/dynamic classification is INFERRED from what it actually
+   does — any of the following silently force it dynamic:
+   • Calling `cookies()` or `headers()` (from `next/headers`) anywhere in
+     the render path, even indirectly through a shared utility function.
+   • A `fetch` call using `cache: 'no-store'` (or, on Next.js 15+, ANY
+     `fetch` without explicit caching, since the default flipped).
+   • Reading `searchParams` in a Server Component.
+   • Using `export const dynamic = 'force-dynamic'` explicitly.
+   • Certain third-party libraries that internally call one of the above.
+
+   Debugging approach: check the `next build` output table (○ Static, λ
+   Dynamic/Server-rendered) per route, and if a route you expected static
+   shows dynamic, grep for `cookies()`/`headers()`/`no-store` usage in that
+   route's component tree — often it's a shared layout or a utility
+   function (e.g. an auth-check helper) called from an otherwise-static
+   page that's the actual culprit, not the page itself.
+
+────────────────────────────────────────────────────────────────────────────────
+Q32: What's the difference between `revalidatePath` and `revalidateTag`?
+──────────────────────────────────────────────────────────
+A: Both (from `next/cache`) invalidate cached data so the next request
+   re-fetches fresh data, but target different things:
+
+   • `revalidateTag('posts')` — invalidates every cached `fetch` call
+     anywhere in the app that was tagged with `next: { tags: ['posts'] }`,
+     regardless of which route(s) that data appears on. Best when the same
+     underlying data might be rendered on multiple, possibly unrelated,
+     routes (e.g. a post's data shown on both a list page and a detail
+     page) and you want to invalidate ALL of them in one call.
+
+   • `revalidatePath('/posts')` — invalidates the cached rendering of a
+     SPECIFIC route (and by default just that path, or with `{ type:
+     'layout' }` matching a whole layout subtree) — regardless of what
+     tags its underlying fetches used.
+
+   Common pattern: call one or both inside a Server Action right after a
+   mutation, so the UI reflects the change on next navigation/refresh
+   without needing a full redeploy or waiting for a time-based
+   `revalidate` interval to elapse.
+
+────────────────────────────────────────────────────────────────────────────────
+Q33: Why can a Client Component not directly import and render a Server Component?
+──────────────────────────────────────────────────────────
+A: A Server Component's "render" actually happens exclusively on the
+   server — its output is serialized into a special RSC payload format and
+   streamed to the client, where React reconstructs it. A Client Component,
+   once hydrated, runs entirely in the browser and re-renders in response to
+   state/prop changes purely client-side — it has no mechanism to invoke
+   server-only rendering logic (which might touch a database, read
+   environment secrets, etc.) on demand during a client-side re-render.
+
+   If Client Components could freely import Server Components, it would be
+   ambiguous/unsafe: does importing it re-run server logic on every client
+   re-render? Does it leak server-only code (and its dependencies/secrets)
+   into the client bundle? Next.js/React sidesteps this entirely by
+   disallowing the direct import.
+
+   The escape hatch is the "slot"/children pattern — a Server Component
+   renders a Client Component and passes ANOTHER Server Component as its
+   `children` (or another prop). Since the Server Component was already
+   fully rendered server-side by the time it reaches the Client Component,
+   there's no ambiguity — the Client Component just treats it as an opaque
+   already-rendered React node it re-renders around, not through:
+
+     // Server Component
+     export default function Page() {
+       return (
+         <ClientWrapper>
+           <ServerOnlyWidget />   {/* rendered server-side, passed as children */}
+         </ClientWrapper>
+       );
+     }
+
+     // Client Component
+     'use client';
+     export default function ClientWrapper({ children }) {
+       const [open, setOpen] = useState(true);
+       return <div>{open && children}</div>;   // just renders the already-resolved node
+     }
+
+────────────────────────────────────────────────────────────────────────────────
+Q34: How do environment variables work in Next.js, and what's the `NEXT_PUBLIC_` prefix for?
+──────────────────────────────────────────────────────────
+A: By default, environment variables defined in `.env.local`/`.env.production`
+   etc. are only available on the SERVER (Server Components, Route
+   Handlers, Server Actions, `next.config.ts`) — they are never bundled into
+   client-side JS, which is the correct default for secrets (API keys,
+   database URLs).
+
+   Prefixing a variable with `NEXT_PUBLIC_` makes Next.js inline its value
+   directly into the CLIENT JS bundle at build time, making it available in
+   Client Components/the browser:
+
+     # .env.local
+     DATABASE_URL=postgres://...          # server-only, never exposed to the browser
+     NEXT_PUBLIC_ANALYTICS_ID=UA-12345    # inlined into client bundle — PUBLIC, visible to anyone
+
+   Security implication: NEVER put secrets behind `NEXT_PUBLIC_` — anything
+   with that prefix should be treated as fully public (viewable by anyone
+   inspecting the deployed JS), since it's literally string-replaced into
+   the browser bundle at build time, not fetched securely at runtime.
+
+================================================================================
+END OF FILE — good luck with your interview!
+================================================================================
