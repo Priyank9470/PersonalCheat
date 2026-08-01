@@ -1,6 +1,9 @@
 using AutoMapper;
+using FluentValidation;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 
 //using Microsoft.OpenApi;
@@ -11,8 +14,10 @@ using ServiceManagement.MappingProfile;
 using ServiceManagement.Repository;
 using ServiceManagement.Repository.Classes;
 using ServiceManagement.Repository.Interface;
+using ServiceManagement.Service.Authentication;
 using ServiceManagement.Service.Classes;
 using ServiceManagement.Service.Interfaces;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,6 +27,13 @@ builder.Services.AddDbContext<ServiceManagementDBContext>(options =>
 // Add services to the container.
 builder.Services.AddScoped<IServiceRepository, ServiceRepository>();
 builder.Services.AddScoped<IServiceService, ServiceService>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<JwtTokenGeneration>();
+
+// Register FluentValidation validators
+builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
 builder.Services.AddControllers();
 
@@ -29,6 +41,26 @@ builder.Services.AddAutoMapper(configuration => configuration.AddMaps(typeof(Pro
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 //builder.Services.AddOpenApi();
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+	 .AddJwtBearer(options =>
+	 {
+		 options.RequireHttpsMetadata = false;
+		 options.SaveToken = true;
+
+		 options.TokenValidationParameters = new TokenValidationParameters
+		 {
+			 ValidateIssuer = true,
+			 ValidateAudience = true,
+			 ValidateLifetime = true,
+			 ValidateIssuerSigningKey = true,
+
+			 ValidIssuer = builder.Configuration["Jwt:Issuer"],
+			 ValidAudience = builder.Configuration["Jwt:Audience"],
+			 IssuerSigningKey = new SymmetricSecurityKey(
+				 Encoding.UTF8.GetBytes(builder.Configuration["Jwt:key"]))
+		 };
+	 });
 
 builder.Services.AddSwaggerGen(options =>
 {

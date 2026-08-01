@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ServiceManagement.Core.RequestModel;
 using ServiceManagement.Core.ResponseModel;
@@ -25,6 +26,7 @@ namespace ServiceManagement.Controllers
 		/// <param name="searchText"></param>
 		/// <returns></returns>
 		[HttpGet("GetAllServices")]
+		[Authorize(Roles = "Admin")]
 		public async Task<IActionResult> GetAllServices(string? searchText)
 		{
 			BaseResponseModel<List<ServiceResponse>> response = new();
@@ -44,6 +46,7 @@ namespace ServiceManagement.Controllers
 		}
 
 		[HttpPost("AddEditService")]
+		[Authorize(Roles = "User")]
 		public async Task<IActionResult> AddEditservice(AddEditServiceRequest request)
 		{
 			if (request == null)

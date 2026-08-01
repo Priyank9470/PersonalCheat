@@ -11,6 +11,8 @@ namespace ServiceManagement.MappingProfile
 		{
 			CreateMap<Entity.Service, ServiceResponse>();
 			CreateMap<AddEditServiceRequest, Entity.Service>();
+			CreateMap<Entity.User, UserResponse>();
+			CreateMap<UserRequest, Entity.User>();
 		}
 	}
 }

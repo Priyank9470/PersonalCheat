@@ -21,6 +21,7 @@ namespace ServiceManagement.Repository
 
 		public DbSet<Service> Services { get; set; }
 		public DbSet<ServiceBooking> ServicesBookings { get; set; }
+		public DbSet<User> Users { get; set; }
 
 		
 
