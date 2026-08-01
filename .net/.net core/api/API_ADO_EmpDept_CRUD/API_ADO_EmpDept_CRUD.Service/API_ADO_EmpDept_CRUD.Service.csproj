@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\API_ADO_EmpDept_CRUD.Models\API_ADO_EmpDept_CRUD.Models.csproj" />
+    <ProjectReference Include="..\API_ADO_EmpDept_CRUD.Repository\API_ADO_EmpDept_CRUD.Repository.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
