@@ -24,16 +24,27 @@ namespace ServiceManagement.Service.Classes
 			_mapper = mapper;
 		}
 
-		public async Task<List<ServiceResponse>> GetAllServices(string searchText)
+		public async Task<(List<ServiceResponse> Items, int TotalRecords)> GetAllServices(string searchText, int pageNumber, int pageSize)
 		{
-			List<Entity.Service> services = await _serviceRepository.GetAllServices(searchText);
-			return _mapper.Map<List<ServiceResponse>>(services);
+			(List<Entity.Service> services, int TotalRecords) = await _serviceRepository.GetAllServices(searchText, pageNumber, pageSize);
+			return (_mapper.Map<List<ServiceResponse>>(services), TotalRecords);
 		}
 
 		public async Task<int> AddEditservice(AddEditServiceRequest request)
 		{
 			Entity.Service service = _mapper.Map<Entity.Service>(request);
 			return await _serviceRepository.AddEditService(service);
+		}
+
+		public async Task<ServiceResponse> GetServiceById(int serviceId)
+		{
+			Entity.Service service = await _serviceRepository.GetServiceById(serviceId);
+			return _mapper.Map<ServiceResponse>(service);
+		}
+
+		public async Task<bool> DeleteService(int serviceId)
+		{
+			return await _serviceRepository.DeleteService(serviceId);
 		}
 	}
 }

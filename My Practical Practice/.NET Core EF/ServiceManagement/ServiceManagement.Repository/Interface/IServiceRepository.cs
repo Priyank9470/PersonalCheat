@@ -9,7 +9,9 @@ namespace ServiceManagement.Repository.Interface
 {
 	public interface IServiceRepository
 	{
-		public Task<List<Service>> GetAllServices(string searchText);
+		public Task<(List<Service> Items, int TotalRecords)> GetAllServices(string searchText, int pageNumber, int pageSize);
 		public Task<int> AddEditService(Service service);
+		public Task<Service> GetServiceById(int serviceId);
+		public Task<bool> DeleteService(int serviceId);
 	}
 }

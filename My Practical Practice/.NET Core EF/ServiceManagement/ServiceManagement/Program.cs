@@ -91,6 +91,20 @@ builder.Services.AddSwaggerGen(options =>
 	});
 });
 
+builder.Services.AddCors(options =>
+{
+	options.AddPolicy(name: "ServiceManagement", policy =>
+	{
+		policy.WithOrigins(
+					"http://localhost:5173",       // React/Vue dev server
+					"https://yourfrontendApp.com"  // Production domain
+			   )
+			  .AllowAnyHeader()
+			  .AllowAnyMethod()
+			  .AllowCredentials(); // Optional: required if using cookies/Windows Auth
+	});
+});
+
 builder.Services.AddHttpContextAccessor();
 
 var app = builder.Build();
@@ -107,6 +121,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseCors("ServiceManagement");
 
 app.UseAuthorization();
 

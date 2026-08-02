@@ -12,6 +12,7 @@ namespace ServiceManagement.Controllers
 {
 	[Route("api/[controller]")]
 	[ApiController]
+	[Authorize(Roles = "Admin")]
 	public class ServiceController : ControllerBase
 	{
 		private readonly IServiceService _serviceService;
@@ -26,16 +27,16 @@ namespace ServiceManagement.Controllers
 		/// <param name="searchText"></param>
 		/// <returns></returns>
 		[HttpGet("GetAllServices")]
-		[Authorize(Roles = "Admin")]
-		public async Task<IActionResult> GetAllServices(string? searchText)
+		public async Task<IActionResult> GetAllServices(string? searchText, int pageNumber, int pageSize)
 		{
 			BaseResponseModel<List<ServiceResponse>> response = new();
-			List<ServiceResponse> services = await _serviceService.GetAllServices(searchText);
+			(List<ServiceResponse> Items, int TotalRecords) = await _serviceService.GetAllServices(searchText, pageNumber, pageSize);
 
-			if (services != null && services.Count > 0)
+			if (Items != null && Items.Count > 0)
 			{
 				response.StatusCode = HttpStatusCode.OK;
-				response.Data = services;
+				response.Data = Items;
+				response.TotalRecords = TotalRecords;
 				response.IsSuccess = true;
 				response.Message = "Services retrieved successfully.";
 				return Ok(response);
@@ -46,7 +47,6 @@ namespace ServiceManagement.Controllers
 		}
 
 		[HttpPost("AddEditService")]
-		[Authorize(Roles = "User")]
 		public async Task<IActionResult> AddEditservice(AddEditServiceRequest request)
 		{
 			if (request == null)
@@ -70,6 +70,49 @@ namespace ServiceManagement.Controllers
 				response.StatusCode = HttpStatusCode.BadRequest;
 				response.Message = $"Failed to {(request.ServiceID > 0 ? "Update" : "Add")} service.";
 				return BadRequest(response);
+			}
+		}
+
+		[HttpGet("GetServiceById")]
+		public async Task<IActionResult> GetServiceById(int id)
+		{
+			BaseResponseModel<ServiceResponse> response = new();
+			ServiceResponse service = await _serviceService.GetServiceById(id);
+
+			if (service != null)
+			{
+				response.StatusCode = HttpStatusCode.OK;
+				response.Data = service;
+				response.IsSuccess = true;
+				response.Message = "Service retrieved successfully.";
+				return Ok(response);
+			}
+			response.StatusCode = HttpStatusCode.NotFound;
+			response.IsSuccess = true;
+			response.Message = "Service not found.";
+			return NotFound(response);
+		}
+
+		[HttpDelete("DeleteService")]
+		public async Task<IActionResult> DeleteService(int id)
+		{
+			BaseResponseModel<bool> response = new();
+			bool isDeleted = await _serviceService.DeleteService(id);
+			if (isDeleted)
+			{
+				response.StatusCode = HttpStatusCode.OK;
+				response.Data = true;
+				response.IsSuccess = true;
+				response.Message = "Service deleted successfully.";
+				return Ok(response);
+			}
+			else
+			{
+				response.StatusCode = HttpStatusCode.NotFound;
+				response.Data = false;
+				response.IsSuccess = false;
+				response.Message = "Service not found or could not be deleted.";
+				return NotFound(response);
 			}
 		}
 	}

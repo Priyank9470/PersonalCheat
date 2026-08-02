@@ -17,14 +17,20 @@ namespace ServiceManagement.Repository.Classes
 			_dbContext = dbContext;
 		}
 
-		public async Task<List<Service>> GetAllServices(string searchText)
+		public async Task<(List<Service> Items, int TotalRecords)> GetAllServices(string searchText, int pageNumber, int pageSize)
 		{
-			return await _dbContext.Services
+			IQueryable<Service> services = _dbContext.Services
 						.Where(s => s.IsActive &&
 							(string.IsNullOrEmpty(searchText) ||
-								 s.ServiceName.Contains(searchText) ||
-								 s.ServiceNumber.Contains(searchText)))
-						.ToListAsync();
+							 s.ServiceName.Contains(searchText) ||
+							 s.ServiceNumber.Contains(searchText)));
+
+			int totalRecords = await services.CountAsync();
+
+			return (await services
+				.Skip((pageNumber - 1) * pageSize)
+				.Take(pageSize)
+				.ToListAsync(), totalRecords);
 		}
 
 		public async Task<int> AddEditService(Service service)
@@ -46,6 +52,23 @@ namespace ServiceManagement.Repository.Classes
 				await _dbContext.AddAsync(service);
 			}
 			return service.ServiceId;
+		}
+
+		public async Task<Service> GetServiceById(int serviceId)
+		{
+			return await _dbContext.Services.FindAsync(serviceId);
+		}
+
+		public async Task<bool> DeleteService(int serviceId)
+		{
+			Service service = await _dbContext.Services.FindAsync(serviceId);
+			if (service != null)
+			{
+				service.IsActive = false;
+				await _dbContext.UpdateAsync(service);
+				return true;
+			}
+			return false;
 		}
 	}
 }
